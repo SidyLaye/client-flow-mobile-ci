@@ -1,58 +1,139 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
-import { Session, User } from "@supabase/supabase-js";
-import { supabase } from "@/integrations/supabase/client";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 
-interface AuthContextType {
-  session: Session | null;
-  user: User | null;
+import { api, ApiError, entrepreneurStore, tokenStore } from "@/lib/api";
+import type { MeResponse, UserRoleEntry } from "@/lib/api-types";
+
+interface AuthContextValue {
+  user: MeResponse["user"] | null;
+  roles: UserRoleEntry[];
+  activeEntrepreneurId: string | null;
   loading: boolean;
+  // True only after a successful refresh that produced both a user and an active tenant.
+  isAuthenticated: boolean;
+
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
+  setActiveEntrepreneur: (id: string) => void;
+  refreshMe: () => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<Session | null>(null);
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<MeResponse["user"] | null>(null);
+  const [roles, setRoles] = useState<UserRoleEntry[]>([]);
+  const [activeEntrepreneurId, setActiveEntrepreneurIdState] = useState<string | null>(
+    () => entrepreneurStore.get(),
+  );
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
-        setLoading(false);
-      }
-    );
-
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
-
-    return () => subscription.unsubscribe();
+  const setActiveEntrepreneur = useCallback((id: string) => {
+    entrepreneurStore.set(id);
+    setActiveEntrepreneurIdState(id);
   }, []);
 
-  const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    return { error: error as Error | null };
-  };
+  const fetchMe = useCallback(async (): Promise<MeResponse | null> => {
+    try {
+      const me = await api.auth.me();
+      setUser(me.user);
+      setRoles(me.roles);
 
-  const signOut = async () => {
-    await supabase.auth.signOut();
-  };
+      // If no active tenant is selected yet, auto-select the first active role
+      // (or honor the env override during dev).
+      const stored = entrepreneurStore.get();
+      const envDefault = import.meta.env.VITE_DEFAULT_ENTREPRENEUR_ID as string | undefined;
 
-  return (
-    <AuthContext.Provider value={{ session, user, loading, signIn, signOut }}>
-      {children}
-    </AuthContext.Provider>
+      // Validate stored ID against current roles (may be stale after DB reset)
+      const storedIsValid = stored && me.roles.some((r) => r.entrepreneur === stored && r.is_active);
+      const candidate =
+        (storedIsValid ? stored : null) ||
+        envDefault ||
+        me.roles.find((r) => r.is_active)?.entrepreneur ||
+        null;
+
+      if (candidate && candidate !== stored) {
+        entrepreneurStore.set(candidate);
+        setActiveEntrepreneurIdState(candidate);
+      } else if (candidate) {
+        setActiveEntrepreneurIdState(candidate);
+      }
+      return me;
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        tokenStore.clear();
+        entrepreneurStore.clear();
+        setUser(null);
+        setRoles([]);
+        setActiveEntrepreneurIdState(null);
+      }
+      return null;
+    }
+  }, []);
+
+  // Boot: if we have a token, hydrate user + roles.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!tokenStore.getAccess() && !tokenStore.getRefresh()) {
+        if (!cancelled) setLoading(false);
+        return;
+      }
+      await fetchMe();
+      if (!cancelled) setLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [fetchMe]);
+
+  const signIn = useCallback(
+    async (email: string, password: string) => {
+      try {
+        const tokens = await api.auth.login(email, password);
+        tokenStore.set(tokens);
+        await fetchMe();
+        return { error: null };
+      } catch (err) {
+        return { error: err instanceof Error ? err : new Error("Login failed") };
+      }
+    },
+    [fetchMe],
   );
+
+  const signOut = useCallback(async () => {
+    const refresh = tokenStore.getRefresh();
+    if (refresh) {
+      try { await api.auth.logout(refresh); } catch { /* swallow */ }
+    }
+    tokenStore.clear();
+    entrepreneurStore.clear();
+    setUser(null);
+    setRoles([]);
+    setActiveEntrepreneurIdState(null);
+  }, []);
+
+  const value = useMemo<AuthContextValue>(
+    () => ({
+      user,
+      roles,
+      activeEntrepreneurId,
+      loading,
+      isAuthenticated: Boolean(user && activeEntrepreneurId),
+      signIn,
+      signOut,
+      setActiveEntrepreneur,
+      refreshMe: async () => {
+        await fetchMe();
+      },
+    }),
+    [user, roles, activeEntrepreneurId, loading, signIn, signOut, setActiveEntrepreneur, fetchMe],
+  );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {
-  const context = useContext(AuthContext);
-  if (!context) throw new Error("useAuth must be used within AuthProvider");
-  return context;
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error("useAuth must be used within AuthProvider");
+  return ctx;
 }

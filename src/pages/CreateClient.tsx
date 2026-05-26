@@ -1,29 +1,54 @@
 import { useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
+import { ArrowLeft, Loader2, Save } from "lucide-react";
+import { toast } from "sonner";
+
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Save } from "lucide-react";
-import { toast } from "sonner";
+import { api, ApiError } from "@/lib/api";
+import type { Client, ClientCreatePayload } from "@/lib/api-types";
+
+const empty: ClientCreatePayload = {
+  company_name: "",
+  first_name: "",
+  last_name: "",
+  email: "",
+  phone: "",
+  siren: "",
+  vat_number: "",
+  address_line1: "",
+  address_line2: "",
+  postal_code: "",
+  city: "",
+  country: "FR",
+};
 
 export default function CreateClient() {
   const navigate = useNavigate();
-  const [creating, setCreating] = useState(false);
+  const qc = useQueryClient();
+  const [form, setForm] = useState<ClientCreatePayload>(empty);
+
+  const update =
+    (field: keyof ClientCreatePayload) =>
+    (e: React.ChangeEvent<HTMLInputElement>) =>
+      setForm((f) => ({ ...f, [field]: e.target.value }));
+
+  const mutation = useMutation<Client, ApiError, ClientCreatePayload>({
+    mutationFn: (payload) => api.clients.create(payload),
+    onSuccess: (created) => {
+      toast.success("Client créé avec succès");
+      qc.invalidateQueries({ queryKey: ["clients"] });
+      navigate(`/clients/${created.id}`);
+    },
+    onError: (err) => toast.error("Création impossible", { description: err.message }),
+  });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setCreating(true);
-    setTimeout(() => {
-      toast.success("Client créé avec succès", {
-        description: "Dossier initialisé · Invitation envoyée au client",
-      });
-      setCreating(false);
-      navigate("/clients/1");
-    }, 1000);
+    mutation.mutate(form);
   };
 
   return (
@@ -34,205 +59,100 @@ export default function CreateClient() {
         </Button>
         <div>
           <h1 className="text-2xl font-semibold">Nouveau client</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">Créer un nouveau dossier client</p>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            Créer un nouveau client facturable
+          </p>
         </div>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Informations générales */}
         <Card>
-          <CardHeader><CardTitle className="text-base">Informations générales</CardTitle></CardHeader>
+          <CardHeader>
+            <CardTitle className="text-base">Informations générales</CardTitle>
+          </CardHeader>
           <CardContent className="grid sm:grid-cols-2 gap-4">
             <div className="sm:col-span-2">
-              <Label>Type de client</Label>
-              <Select defaultValue="societe">
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="particulier">Particulier</SelectItem>
-                  <SelectItem value="auto-entrepreneur">Auto-entrepreneur</SelectItem>
-                  <SelectItem value="societe">Société</SelectItem>
-                  <SelectItem value="association">Association</SelectItem>
-                </SelectContent>
-              </Select>
+              <Label>Nom de l'entreprise</Label>
+              <Input
+                placeholder="SARL Exemple (laisser vide pour particulier)"
+                value={form.company_name}
+                onChange={update("company_name")}
+              />
             </div>
-            <div><Label>Nom de l'entreprise *</Label><Input placeholder="SARL Exemple" required /></div>
-            <div><Label>Prénom du contact *</Label><Input placeholder="Jean" required /></div>
-            <div><Label>Nom du contact *</Label><Input placeholder="Dupont" required /></div>
-            <div><Label>Email principal *</Label><Input type="email" placeholder="contact@exemple.fr" required /></div>
-            <div><Label>Téléphone</Label><Input placeholder="01 23 45 67 89" /></div>
-            <div className="sm:col-span-2"><Label>Adresse</Label><Input placeholder="123 rue de la Paix, 75001 Paris" /></div>
+            <div>
+              <Label>Prénom *</Label>
+              <Input value={form.first_name} onChange={update("first_name")} required />
+            </div>
+            <div>
+              <Label>Nom *</Label>
+              <Input value={form.last_name} onChange={update("last_name")} required />
+            </div>
+            <div>
+              <Label>Email *</Label>
+              <Input type="email" value={form.email} onChange={update("email")} required />
+            </div>
+            <div>
+              <Label>Téléphone</Label>
+              <Input value={form.phone} onChange={update("phone")} />
+            </div>
           </CardContent>
         </Card>
 
-        {/* Informations légales */}
         <Card>
-          <CardHeader><CardTitle className="text-base">Informations juridiques</CardTitle></CardHeader>
+          <CardHeader>
+            <CardTitle className="text-base">Informations juridiques</CardTitle>
+          </CardHeader>
           <CardContent className="grid sm:grid-cols-2 gap-4">
             <div>
-              <Label>Forme juridique</Label>
-              <Select>
-                <SelectTrigger><SelectValue placeholder="Sélectionner" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="sarl">SARL</SelectItem>
-                  <SelectItem value="sas">SAS</SelectItem>
-                  <SelectItem value="eurl">EURL</SelectItem>
-                  <SelectItem value="sasu">SASU</SelectItem>
-                  <SelectItem value="sa">SA</SelectItem>
-                  <SelectItem value="sci">SCI</SelectItem>
-                  <SelectItem value="ei">EI</SelectItem>
-                  <SelectItem value="asso">Association</SelectItem>
-                </SelectContent>
-              </Select>
+              <Label>SIREN</Label>
+              <Input value={form.siren} onChange={update("siren")} maxLength={9} />
             </div>
-            <div><Label>SIREN</Label><Input placeholder="123 456 789" /></div>
-            <div><Label>SIRET</Label><Input placeholder="123 456 789 00012" /></div>
-            <div><Label>N° TVA intracommunautaire</Label><Input placeholder="FR12345678901" /></div>
-            <div><Label>Date de création</Label><Input type="date" /></div>
-            <div><Label>Activité / Secteur</Label><Input placeholder="Commerce de détail" /></div>
+            <div>
+              <Label>N° TVA intracommunautaire</Label>
+              <Input value={form.vat_number} onChange={update("vat_number")} />
+            </div>
           </CardContent>
         </Card>
 
-        {/* Paramètres comptables */}
         <Card>
-          <CardHeader><CardTitle className="text-base">Paramètres comptables</CardTitle></CardHeader>
+          <CardHeader>
+            <CardTitle className="text-base">Adresse</CardTitle>
+          </CardHeader>
           <CardContent className="grid sm:grid-cols-2 gap-4">
-            <div>
-              <Label>Régime fiscal</Label>
-              <Select>
-                <SelectTrigger><SelectValue placeholder="Sélectionner" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="reel_normal">Réel normal</SelectItem>
-                  <SelectItem value="reel_simplifie">Réel simplifié</SelectItem>
-                  <SelectItem value="micro">Micro-entreprise</SelectItem>
-                  <SelectItem value="franchise">Franchise en base</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="sm:col-span-2">
+              <Label>Adresse *</Label>
+              <Input value={form.address_line1} onChange={update("address_line1")} required />
+            </div>
+            <div className="sm:col-span-2">
+              <Label>Complément d'adresse</Label>
+              <Input value={form.address_line2} onChange={update("address_line2")} />
             </div>
             <div>
-              <Label>Régime TVA</Label>
-              <Select>
-                <SelectTrigger><SelectValue placeholder="Sélectionner" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="reel_normal">Réel normal</SelectItem>
-                  <SelectItem value="reel_simplifie">Réel simplifié</SelectItem>
-                  <SelectItem value="franchise">Franchise en base</SelectItem>
-                </SelectContent>
-              </Select>
+              <Label>Code postal *</Label>
+              <Input value={form.postal_code} onChange={update("postal_code")} required />
             </div>
             <div>
-              <Label>Périodicité TVA</Label>
-              <Select>
-                <SelectTrigger><SelectValue placeholder="Sélectionner" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="mensuelle">Mensuelle</SelectItem>
-                  <SelectItem value="trimestrielle">Trimestrielle</SelectItem>
-                  <SelectItem value="annuelle">Annuelle</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div><Label>Date de clôture</Label><Input placeholder="31/12" /></div>
-            <div>
-              <Label>Comptable assigné</Label>
-              <Select>
-                <SelectTrigger><SelectValue placeholder="Sélectionner" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="marie">Marie Leroy</SelectItem>
-                  <SelectItem value="thomas">Thomas Bernard</SelectItem>
-                </SelectContent>
-              </Select>
+              <Label>Ville *</Label>
+              <Input value={form.city} onChange={update("city")} required />
             </div>
             <div>
-              <Label>Collaborateur</Label>
-              <Select>
-                <SelectTrigger><SelectValue placeholder="Sélectionner" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="julie">Julie Martin</SelectItem>
-                  <SelectItem value="lucas">Lucas Petit</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Mode de transmission des pièces</Label>
-              <Select>
-                <SelectTrigger><SelectValue placeholder="Sélectionner" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="manuel">Manuel</SelectItem>
-                  <SelectItem value="mensuel">Mensuel</SelectItem>
-                  <SelectItem value="temps_reel">Temps réel</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Statut du dossier</Label>
-              <Select defaultValue="en_creation">
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="en_creation">En création</SelectItem>
-                  <SelectItem value="actif">Actif</SelectItem>
-                </SelectContent>
-              </Select>
+              <Label>Pays</Label>
+              <Input value={form.country} onChange={update("country")} maxLength={2} />
             </div>
           </CardContent>
         </Card>
 
-        {/* Accès client */}
-        <Card>
-          <CardHeader><CardTitle className="text-base">Accès client</CardTitle></CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center justify-between"><Label>Créer un compte client automatiquement</Label><Switch defaultChecked /></div>
-            <div className="flex items-center justify-between"><Label>Envoyer l'invitation par email</Label><Switch defaultChecked /></div>
-            <div className="flex items-center justify-between"><Label>Activer l'espace client mobile</Label><Switch /></div>
-          </CardContent>
-        </Card>
-
-        {/* Options automatiques */}
-        <Card>
-          <CardHeader><CardTitle className="text-base">Options automatiques</CardTitle></CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center justify-between"><Label>Créer checklist de démarrage</Label><Switch defaultChecked /></div>
-            <div className="flex items-center justify-between"><Label>Créer espace documents</Label><Switch defaultChecked /></div>
-            <div className="flex items-center justify-between"><Label>Programmer première demande documents</Label><Switch defaultChecked /></div>
-            <div className="flex items-center justify-between"><Label>Créer échéances automatiques</Label><Switch defaultChecked /></div>
-          </CardContent>
-        </Card>
-
-        {/* Notes */}
-        <Card>
-          <CardHeader><CardTitle className="text-base">Notes & tags</CardTitle></CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <Label>Tags</Label>
-              <div className="flex flex-wrap gap-2 mt-2">
-                {['TVA', 'Paie', 'Juridique', 'Client premium', 'Retard fréquent'].map(tag => (
-                  <label key={tag} className="flex items-center gap-1.5 text-sm bg-muted px-2.5 py-1 rounded-md cursor-pointer hover:bg-accent">
-                    <input type="checkbox" className="rounded" />
-                    {tag}
-                  </label>
-                ))}
-              </div>
-            </div>
-            <div>
-              <Label>Niveau de priorité</Label>
-              <Select><SelectTrigger><SelectValue placeholder="Normal" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="basse">Basse</SelectItem>
-                  <SelectItem value="normale">Normale</SelectItem>
-                  <SelectItem value="haute">Haute</SelectItem>
-                  <SelectItem value="urgente">Urgente</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div><Label>Notes internes</Label><Textarea placeholder="Notes visibles uniquement par le cabinet..." rows={3} /></div>
-          </CardContent>
-        </Card>
-
-        {/* Buttons */}
         <div className="flex items-center justify-end gap-3 pt-2">
-          <Button type="button" variant="outline" onClick={() => navigate(-1)}>Annuler</Button>
-          <Button type="button" variant="secondary">Enregistrer brouillon</Button>
-          <Button type="submit" disabled={creating}>
-            <Save className="h-4 w-4 mr-1.5" />
-            {creating ? "Création..." : "Créer le client"}
+          <Button type="button" variant="outline" onClick={() => navigate(-1)}>
+            Annuler
+          </Button>
+          <Button type="submit" disabled={mutation.isPending}>
+            {mutation.isPending ? (
+              <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+            ) : (
+              <Save className="h-4 w-4 mr-1.5" />
+            )}
+            Créer le client
           </Button>
         </div>
       </form>

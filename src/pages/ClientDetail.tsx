@@ -1,24 +1,122 @@
-import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Send, MessageSquare, FileUp, CheckSquare, Edit, AlertTriangle } from "lucide-react";
-import ClientAccessTab from "@/components/client/ClientAccessTab";
+import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useNavigate, useParams } from "react-router-dom";
+import {
+  ArrowLeft,
+  Calendar,
+  CheckSquare,
+  FileText,
+  Loader2,
+  Mail,
+  MapPin,
+  MessageSquare,
+  Phone,
+  Receipt,
+  Send,
+} from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { mockClients, mockDocuments, mockRequests, mockMessages, mockTasks, mockDeadlines, mockInvoices, getStatusBadge, statusLabels } from "@/lib/mock-data";
+import { api, ApiError } from "@/lib/api";
+
+const fmt = (value: string | number | null | undefined) => {
+  const n = typeof value === "string" ? parseFloat(value) : (value ?? 0);
+  return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(
+    Number.isFinite(n) ? n : 0,
+  );
+};
 
 export default function ClientDetail() {
-  const { id } = useParams();
+  const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const client = mockClients.find((c) => c.id === id) || mockClients[0];
-  const clientDocs = mockDocuments.filter((d) => d.clientId === client.id);
-  const clientRequests = mockRequests.filter((r) => r.clientId === client.id);
-  const clientMessages = mockMessages.filter((m) => m.clientId === client.id);
-  const clientTasks = mockTasks.filter((t) => t.clientId === client.id);
-  const clientDeadlines = mockDeadlines.filter((d) => d.clientId === client.id);
-  const clientInvoices = mockInvoices.filter((i) => i.clientId === client.id);
 
-  const typeLabels: Record<string, string> = { facture: 'Facture', devis: 'Devis', avoir: 'Avoir' };
-  const fmt = (n: number) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(n);
+  const clientQuery = useQuery({
+    queryKey: ["clients", id],
+    queryFn: () => api.clients.retrieve(id!),
+    enabled: Boolean(id),
+    retry: false,
+  });
+
+  const invoicesQuery = useQuery({
+    queryKey: ["invoices", { client: id }],
+    queryFn: () => api.invoices.list({ client: id! }),
+    enabled: Boolean(id),
+    retry: false,
+  });
+  const quotesQuery = useQuery({
+    queryKey: ["quotes", { client: id }],
+    queryFn: () => api.quotes.list({ client: id! }),
+    enabled: Boolean(id),
+    retry: false,
+  });
+  const documentsQuery = useQuery({
+    queryKey: ["documents", { client: id }],
+    queryFn: () => api.documents.list({ client: id! }),
+    enabled: Boolean(id),
+    retry: false,
+  });
+  const requestsQuery = useQuery({
+    queryKey: ["document-requests", { client: id }],
+    queryFn: () => api.documentRequests.list({ client: id! }),
+    enabled: Boolean(id),
+    retry: false,
+  });
+  const messagesQuery = useQuery({
+    queryKey: ["messages", { client: id }],
+    queryFn: () => api.messages.list({ client: id! }),
+    enabled: Boolean(id),
+    retry: false,
+  });
+  const tasksQuery = useQuery({
+    queryKey: ["tasks", { client: id }],
+    queryFn: () => api.tasks.list({ client: id! }),
+    enabled: Boolean(id),
+    retry: false,
+  });
+  const deadlinesQuery = useQuery({
+    queryKey: ["deadlines", { client: id }],
+    queryFn: () => api.deadlines.list({ client: id! }),
+    enabled: Boolean(id),
+    retry: false,
+  });
+
+  const invoices = useMemo(() => invoicesQuery.data?.results ?? [], [invoicesQuery.data]);
+  const quotes = useMemo(() => quotesQuery.data?.results ?? [], [quotesQuery.data]);
+  const documents = useMemo(() => documentsQuery.data?.results ?? [], [documentsQuery.data]);
+  const requests = useMemo(() => requestsQuery.data?.results ?? [], [requestsQuery.data]);
+  const messages = useMemo(() => messagesQuery.data?.results ?? [], [messagesQuery.data]);
+  const tasks = useMemo(() => tasksQuery.data?.results ?? [], [tasksQuery.data]);
+  const deadlines = useMemo(() => deadlinesQuery.data?.results ?? [], [deadlinesQuery.data]);
+
+  if (clientQuery.isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (clientQuery.isError || !clientQuery.data) {
+    return (
+      <div className="space-y-3">
+        <Button variant="ghost" size="sm" onClick={() => navigate("/clients")}>
+          <ArrowLeft className="h-4 w-4 mr-1.5" /> Retour
+        </Button>
+        <p className="text-sm text-destructive">
+          {(clientQuery.error as ApiError | undefined)?.message ?? "Client introuvable."}
+        </p>
+      </div>
+    );
+  }
+
+  const c = clientQuery.data;
+  const fullName = `${c.first_name} ${c.last_name}`.trim();
+  const headline = c.company_name || fullName || c.email;
+  const totalTtc = invoices.reduce((s, i) => s + parseFloat(i.total_ttc || "0"), 0);
+  const missingDocs = requests.filter(
+    (r) => r.status !== "completed" && r.status !== "cancelled",
+  ).length;
 
   return (
     <div className="space-y-5">
@@ -27,201 +125,242 @@ export default function ClientDetail() {
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <div className="flex-1">
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-semibold">{client.companyName}</h1>
-            <span className={getStatusBadge(client.status)}>{statusLabels[client.status]}</span>
-            {client.isUrgent && <AlertTriangle className="h-4 w-4 text-destructive" />}
-          </div>
+          <h1 className="text-2xl font-semibold">{headline}</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            {client.contactFirstName} {client.contactLastName} · {client.email} · {client.assignedAccountant}
+            {fullName} · {c.email} · Statut : {c.status}
           </p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm"><Send className="h-3.5 w-3.5 mr-1.5" />Demander</Button>
-          <Button variant="outline" size="sm"><MessageSquare className="h-3.5 w-3.5 mr-1.5" />Message</Button>
-          <Button variant="outline" size="sm"><FileUp className="h-3.5 w-3.5 mr-1.5" />Document</Button>
         </div>
       </div>
 
       <Tabs defaultValue="overview">
-        <TabsList>
+        <TabsList className="flex-wrap h-auto">
           <TabsTrigger value="overview">Vue d'ensemble</TabsTrigger>
-          <TabsTrigger value="documents">Documents ({clientDocs.length})</TabsTrigger>
-          <TabsTrigger value="requests">Demandes ({clientRequests.length})</TabsTrigger>
-          <TabsTrigger value="messages">Messages ({clientMessages.length})</TabsTrigger>
-          <TabsTrigger value="tasks">Tâches ({clientTasks.length})</TabsTrigger>
-          <TabsTrigger value="deadlines">Échéances ({clientDeadlines.length})</TabsTrigger>
-          <TabsTrigger value="invoices">Factures ({clientInvoices.length})</TabsTrigger>
-          <TabsTrigger value="access">Accès client</TabsTrigger>
+          <TabsTrigger value="documents">Documents ({documents.length})</TabsTrigger>
+          <TabsTrigger value="requests">Demandes ({requests.length})</TabsTrigger>
+          <TabsTrigger value="messages">Messages ({messages.length})</TabsTrigger>
+          <TabsTrigger value="tasks">Tâches ({tasks.length})</TabsTrigger>
+          <TabsTrigger value="deadlines">Échéances ({deadlines.length})</TabsTrigger>
+          <TabsTrigger value="invoices">Factures ({invoices.length})</TabsTrigger>
+          <TabsTrigger value="quotes">Devis ({quotes.length})</TabsTrigger>
           <TabsTrigger value="info">Informations</TabsTrigger>
         </TabsList>
 
-        {/* Overview */}
         <TabsContent value="overview" className="space-y-4 mt-4">
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="stat-card"><span className="text-2xl font-bold">{clientDocs.filter(d => d.status === 'en_revue' || d.status === 'recu').length}</span><span className="text-xs text-muted-foreground">Documents en attente</span></div>
-            <div className="stat-card"><span className="text-2xl font-bold text-destructive">{client.missingDocs}</span><span className="text-xs text-muted-foreground">Pièces manquantes</span></div>
-            <div className="stat-card"><span className="text-2xl font-bold">{clientRequests.filter(r => r.status !== 'completee' && r.status !== 'annulee').length}</span><span className="text-xs text-muted-foreground">Demandes en cours</span></div>
-            <div className="stat-card"><span className="text-2xl font-bold">{clientMessages.filter(m => !m.readAt).length}</span><span className="text-xs text-muted-foreground">Messages non lus</span></div>
-          </div>
-          <div className="grid lg:grid-cols-2 gap-4">
-            <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Prochaines échéances</CardTitle></CardHeader>
-              <CardContent>{clientDeadlines.length > 0 ? clientDeadlines.map(d => (
-                <div key={d.id} className="flex justify-between py-2 border-b last:border-0">
-                  <div><p className="text-sm font-medium">{d.type}</p><p className="text-xs text-muted-foreground">{d.dueDate}</p></div>
-                  <span className={getStatusBadge(d.status)}>{statusLabels[d.status]}</span>
-                </div>
-              )) : <p className="text-sm text-muted-foreground">Aucune échéance</p>}</CardContent>
-            </Card>
-            <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Tâches en cours</CardTitle></CardHeader>
-              <CardContent>{clientTasks.length > 0 ? clientTasks.map(t => (
-                <div key={t.id} className="flex justify-between py-2 border-b last:border-0">
-                  <div><p className="text-sm font-medium">{t.title}</p><p className="text-xs text-muted-foreground">{t.assignedTo}</p></div>
-                  <span className={getStatusBadge(t.status)}>{statusLabels[t.status]}</span>
-                </div>
-              )) : <p className="text-sm text-muted-foreground">Aucune tâche</p>}</CardContent>
-            </Card>
+          <div className="grid sm:grid-cols-4 gap-4">
+            <Stat icon={Receipt} label="Factures" value={String(invoices.length)} />
+            <Stat icon={FileText} label="Devis" value={String(quotes.length)} />
+            <Stat icon={Send} label="Demandes ouvertes" value={String(missingDocs)} />
+            <Stat icon={Receipt} label="Total TTC" value={fmt(totalTtc)} />
           </div>
         </TabsContent>
 
-        {/* Documents */}
         <TabsContent value="documents" className="mt-4">
-          <div className="bg-card rounded-lg border border-border overflow-hidden">
-            <table className="w-full text-sm">
-              <thead><tr className="border-b bg-muted/50">
-                <th className="text-left px-4 py-3 font-medium text-muted-foreground">Fichier</th>
-                <th className="text-left px-4 py-3 font-medium text-muted-foreground">Type</th>
-                <th className="text-left px-4 py-3 font-medium text-muted-foreground">Période</th>
-                <th className="text-left px-4 py-3 font-medium text-muted-foreground">Envoyé par</th>
-                <th className="text-left px-4 py-3 font-medium text-muted-foreground">Statut</th>
-                <th className="text-left px-4 py-3 font-medium text-muted-foreground">Date</th>
-              </tr></thead>
-              <tbody>{clientDocs.map(doc => (
-                <tr key={doc.id} className="border-b last:border-0 hover:bg-muted/30">
-                  <td className="px-4 py-3 font-medium">{doc.fileName}</td>
-                  <td className="px-4 py-3 text-muted-foreground">{doc.category}</td>
-                  <td className="px-4 py-3 text-muted-foreground">{doc.period}</td>
-                  <td className="px-4 py-3 text-muted-foreground">{doc.uploadedBy}</td>
-                  <td className="px-4 py-3"><span className={getStatusBadge(doc.status)}>{statusLabels[doc.status]}</span></td>
-                  <td className="px-4 py-3 text-muted-foreground">{doc.uploadDate}</td>
-                </tr>
-              ))}</tbody>
-            </table>
-            {clientDocs.length === 0 && <p className="text-center py-8 text-muted-foreground">Aucun document</p>}
-          </div>
+          <SimpleTable
+            isLoading={documentsQuery.isLoading}
+            empty="Aucun document."
+            headers={["Fichier", "Catégorie", "Statut", "Période"]}
+            rows={documents.map((d) => [
+              d.file_name,
+              d.category,
+              d.status,
+              d.period_year ? `${String(d.period_month ?? "").padStart(2, "0")}/${d.period_year}` : "—",
+            ])}
+            onRowClick={(idx) => navigate(`/documents/${documents[idx].id}`)}
+          />
         </TabsContent>
 
-        {/* Requests */}
         <TabsContent value="requests" className="mt-4">
-          <div className="space-y-3">
-            {clientRequests.map(r => (
-              <Card key={r.id}><CardContent className="py-4 flex items-center justify-between">
-                <div><p className="text-sm font-medium">{r.title}</p><p className="text-xs text-muted-foreground">{r.description}</p><p className="text-xs text-muted-foreground mt-1">Échéance: {r.dueDate} · Relances: {r.reminderCount}</p></div>
-                <div className="flex items-center gap-2"><span className={getStatusBadge(r.status)}>{statusLabels[r.status]}</span><Button variant="outline" size="sm">Relancer</Button></div>
-              </CardContent></Card>
-            ))}
-            {clientRequests.length === 0 && <p className="text-center py-8 text-muted-foreground">Aucune demande</p>}
-          </div>
+          <SimpleTable
+            isLoading={requestsQuery.isLoading}
+            empty="Aucune demande."
+            headers={["Titre", "Type", "Échéance", "Statut", "Priorité"]}
+            rows={requests.map((r) => [
+              r.title,
+              r.requested_type || "—",
+              r.due_date ?? "—",
+              r.status,
+              r.priority,
+            ])}
+          />
         </TabsContent>
 
-        {/* Messages */}
         <TabsContent value="messages" className="mt-4">
-          <div className="space-y-3">
-            {clientMessages.map(m => (
-              <div key={m.id} className={`p-4 rounded-lg border ${m.isInternal ? 'bg-amber-50/50 border-amber-200' : 'bg-card border-border'}`}>
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-sm font-medium">{m.senderName}</span>
-                  <span className="text-xs text-muted-foreground">{m.senderRole === 'comptable' ? 'Comptable' : 'Client'}</span>
-                  {m.isInternal && <span className="status-badge status-pending">Note interne</span>}
-                  {!m.readAt && !m.isInternal && <span className="h-2 w-2 rounded-full bg-primary" />}
-                </div>
-                <p className="text-sm text-muted-foreground">{m.body}</p>
-                <p className="text-xs text-muted-foreground mt-2">{new Date(m.createdAt).toLocaleString('fr-FR')}</p>
-              </div>
-            ))}
-            {clientMessages.length === 0 && <p className="text-center py-8 text-muted-foreground">Aucun message</p>}
-          </div>
+          <Card>
+            <CardContent className="pt-4 space-y-3">
+              {messagesQuery.isLoading ? (
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              ) : messages.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Aucun message.</p>
+              ) : (
+                messages.slice(-10).map((m) => (
+                  <div key={m.id} className="border-b last:border-0 pb-2">
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <MessageSquare className="h-3 w-3" />
+                      <span className="font-medium">{m.sender_name || m.sender_email}</span>
+                      <span>·</span>
+                      <span>{new Date(m.created_at).toLocaleString("fr-FR")}</span>
+                      {m.is_internal && <span className="text-amber-600">interne</span>}
+                    </div>
+                    <p className="text-sm mt-1 whitespace-pre-line">{m.body}</p>
+                  </div>
+                ))
+              )}
+              <Button variant="outline" size="sm" onClick={() => navigate("/messages")}>
+                Ouvrir la messagerie
+              </Button>
+            </CardContent>
+          </Card>
         </TabsContent>
 
-        {/* Tasks */}
         <TabsContent value="tasks" className="mt-4">
-          <div className="space-y-2">
-            {clientTasks.map(t => (
-              <div key={t.id} className="flex items-center justify-between p-3 bg-card border border-border rounded-lg">
-                <div><p className="text-sm font-medium">{t.title}</p><p className="text-xs text-muted-foreground">{t.assignedTo} · {t.dueDate}</p></div>
-                <div className="flex gap-2"><span className={getStatusBadge(t.status)}>{statusLabels[t.status]}</span><span className={getStatusBadge(t.priority === 'urgente' ? 'en_retard' : t.priority === 'haute' ? 'pieces_attente' : 'a_faire')}>{t.priority}</span></div>
-              </div>
-            ))}
-            {clientTasks.length === 0 && <p className="text-center py-8 text-muted-foreground">Aucune tâche</p>}
-          </div>
+          <SimpleTable
+            isLoading={tasksQuery.isLoading}
+            empty="Aucune tâche."
+            headers={["Titre", "Priorité", "Échéance", "Statut"]}
+            rows={tasks.map((t) => [t.title, t.priority, t.due_date ?? "—", t.status])}
+          />
         </TabsContent>
 
-        {/* Deadlines */}
         <TabsContent value="deadlines" className="mt-4">
-          <div className="space-y-2">
-            {clientDeadlines.map(d => (
-              <div key={d.id} className="flex items-center justify-between p-3 bg-card border border-border rounded-lg">
-                <div><p className="text-sm font-medium">{d.type}</p><p className="text-xs text-muted-foreground">Échéance: {d.dueDate} · {d.assignedTo}</p>{d.notes && <p className="text-xs text-muted-foreground mt-0.5">{d.notes}</p>}</div>
-                <span className={getStatusBadge(d.status)}>{statusLabels[d.status]}</span>
-              </div>
-            ))}
-            {clientDeadlines.length === 0 && <p className="text-center py-8 text-muted-foreground">Aucune échéance</p>}
-          </div>
+          <SimpleTable
+            isLoading={deadlinesQuery.isLoading}
+            empty="Aucune échéance."
+            headers={["Titre", "Type", "Date", "Statut"]}
+            rows={deadlines.map((d) => [d.title, d.type, d.due_date, d.status])}
+          />
         </TabsContent>
 
-        {/* Invoices */}
         <TabsContent value="invoices" className="mt-4">
-          <div className="bg-card rounded-lg border border-border overflow-hidden">
-            <table className="w-full text-sm">
-              <thead><tr className="border-b bg-muted/50">
-                <th className="text-left px-4 py-3 font-medium text-muted-foreground">Numéro</th>
-                <th className="text-left px-4 py-3 font-medium text-muted-foreground">Type</th>
-                <th className="text-left px-4 py-3 font-medium text-muted-foreground">Date</th>
-                <th className="text-left px-4 py-3 font-medium text-muted-foreground">Échéance</th>
-                <th className="text-right px-4 py-3 font-medium text-muted-foreground">TTC</th>
-                <th className="text-left px-4 py-3 font-medium text-muted-foreground">Statut</th>
-                <th className="text-left px-4 py-3 font-medium text-muted-foreground">Paiement</th>
-              </tr></thead>
-              <tbody>{clientInvoices.map(inv => (
-                <tr key={inv.id} className="border-b last:border-0 hover:bg-muted/30 cursor-pointer" onClick={() => navigate(`/factures/${inv.id}`)}>
-                  <td className="px-4 py-3 font-medium">{inv.number}</td>
-                  <td className="px-4 py-3"><span className={`status-badge ${inv.type === 'facture' ? 'status-info' : inv.type === 'devis' ? 'status-pending' : 'status-muted'}`}>{typeLabels[inv.type]}</span></td>
-                  <td className="px-4 py-3 text-muted-foreground">{inv.issueDate}</td>
-                  <td className="px-4 py-3 text-muted-foreground">{inv.dueDate}</td>
-                  <td className="px-4 py-3 text-right font-medium">{fmt(inv.totalTtc)}</td>
-                  <td className="px-4 py-3"><span className={getStatusBadge(inv.status)}>{statusLabels[inv.status]}</span></td>
-                  <td className="px-4 py-3"><span className={getStatusBadge(inv.paymentStatus)}>{statusLabels[inv.paymentStatus]}</span></td>
-                </tr>
-              ))}</tbody>
-            </table>
-            {clientInvoices.length === 0 && <p className="text-center py-8 text-muted-foreground">Aucune facture</p>}
-          </div>
+          <SimpleTable
+            isLoading={invoicesQuery.isLoading}
+            empty="Aucune facture."
+            headers={["Numéro", "Date", "Statut", "TTC"]}
+            rows={invoices.map((i) => [i.invoice_number, i.issue_date, i.status, fmt(i.total_ttc)])}
+            onRowClick={(idx) => navigate(`/factures/${invoices[idx].id}`)}
+          />
         </TabsContent>
 
-        {/* Access */}
-        <TabsContent value="access" className="mt-4">
-          <ClientAccessTab clientId={client.id} clientEmail={client.email} />
+        <TabsContent value="quotes" className="mt-4">
+          <SimpleTable
+            isLoading={quotesQuery.isLoading}
+            empty="Aucun devis."
+            headers={["Numéro", "Date", "Statut", "TTC"]}
+            rows={quotes.map((q) => [q.quote_number, q.issue_date, q.status, fmt(q.total_ttc)])}
+          />
         </TabsContent>
 
-        {/* Info */}
         <TabsContent value="info" className="mt-4">
-          <Card><CardContent className="py-6">
-            <div className="grid sm:grid-cols-2 gap-y-4 gap-x-8 text-sm">
-              <div><span className="text-muted-foreground">Entreprise</span><p className="font-medium">{client.companyName}</p></div>
-              <div><span className="text-muted-foreground">Contact</span><p className="font-medium">{client.contactFirstName} {client.contactLastName}</p></div>
-              <div><span className="text-muted-foreground">Email</span><p className="font-medium">{client.email}</p></div>
-              <div><span className="text-muted-foreground">Téléphone</span><p className="font-medium">{client.phone}</p></div>
-              <div><span className="text-muted-foreground">SIRET</span><p className="font-medium">{client.siret}</p></div>
-              <div><span className="text-muted-foreground">Régime TVA</span><p className="font-medium">{client.vatRegime}</p></div>
-              <div><span className="text-muted-foreground">Périodicité TVA</span><p className="font-medium">{client.vatFrequency}</p></div>
-              <div><span className="text-muted-foreground">Clôture exercice</span><p className="font-medium">{client.fiscalYearEnd}</p></div>
-              <div><span className="text-muted-foreground">Comptable assigné</span><p className="font-medium">{client.assignedAccountant}</p></div>
-              <div><span className="text-muted-foreground">Dernière activité</span><p className="font-medium">{client.lastActivity}</p></div>
-            </div>
-            <Button variant="outline" size="sm" className="mt-6"><Edit className="h-3.5 w-3.5 mr-1.5" />Modifier les informations</Button>
-          </CardContent></Card>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Coordonnées</CardTitle>
+            </CardHeader>
+            <CardContent className="grid sm:grid-cols-2 gap-3 text-sm">
+              <div className="flex items-center gap-2">
+                <Mail className="h-4 w-4 text-muted-foreground" /> {c.email}
+              </div>
+              {c.phone && (
+                <div className="flex items-center gap-2">
+                  <Phone className="h-4 w-4 text-muted-foreground" /> {c.phone}
+                </div>
+              )}
+              <div className="flex items-start gap-2 sm:col-span-2">
+                <MapPin className="h-4 w-4 text-muted-foreground mt-0.5" />
+                <div>
+                  {c.address_line1}
+                  {c.address_line2 && <div>{c.address_line2}</div>}
+                  <div>
+                    {c.postal_code} {c.city} · {c.country}
+                  </div>
+                </div>
+              </div>
+              {c.siren && <div>SIREN : {c.siren}</div>}
+              {c.siret && <div>SIRET : {c.siret}</div>}
+              {c.vat_number && <div>TVA : {c.vat_number}</div>}
+              {c.tax_regime && <div>Régime fiscal : {c.tax_regime}</div>}
+              {c.vat_regime && <div>Régime TVA : {c.vat_regime}</div>}
+              {c.vat_frequency && <div>Périodicité TVA : {c.vat_frequency}</div>}
+              {c.fiscal_year_end && <div>Clôture : {c.fiscal_year_end}</div>}
+              {c.assigned_user_email && (
+                <div>Comptable : {c.assigned_user_email}</div>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
     </div>
+  );
+}
+
+function Stat({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  value: string;
+}) {
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm flex items-center gap-2 text-muted-foreground">
+          <Icon className="h-4 w-4" /> {label}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="text-2xl font-bold">{value}</CardContent>
+    </Card>
+  );
+}
+
+function SimpleTable({
+  isLoading,
+  empty,
+  headers,
+  rows,
+  onRowClick,
+}: {
+  isLoading: boolean;
+  empty: string;
+  headers: string[];
+  rows: Array<Array<string | number>>;
+  onRowClick?: (idx: number) => void;
+}) {
+  return (
+    <Card>
+      <CardContent className="pt-4">
+        {isLoading ? (
+          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        ) : rows.length === 0 ? (
+          <p className="text-sm text-muted-foreground">{empty}</p>
+        ) : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b">
+                {headers.map((h) => (
+                  <th key={h} className="text-left py-2 font-medium text-muted-foreground">
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row, idx) => (
+                <tr
+                  key={idx}
+                  className={`border-b last:border-0 ${onRowClick ? "cursor-pointer hover:bg-muted/30" : ""}`}
+                  onClick={onRowClick ? () => onRowClick(idx) : undefined}
+                >
+                  {row.map((cell, cidx) => (
+                    <td key={cidx} className="py-2">
+                      {cell}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </CardContent>
+    </Card>
   );
 }

@@ -31,10 +31,11 @@ export default function LoginPage() {
     setLoading(false);
 
     if (error) {
-      if (error.message.includes("Invalid login")) {
+      const msg = error.message.toLowerCase();
+      if (msg.includes("no active account") || msg.includes("invalid") || msg.includes("incorrect")) {
         setError("Identifiants incorrects");
       } else {
-        setError("Erreur de connexion. Veuillez réessayer.");
+        setError(error.message || "Erreur de connexion. Veuillez réessayer.");
       }
     } else {
       navigate("/", { replace: true });

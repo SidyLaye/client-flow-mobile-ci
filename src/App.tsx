@@ -21,6 +21,8 @@ import InvoicesList from "./pages/InvoicesList";
 import CreateInvoice from "./pages/CreateInvoice";
 import InvoiceDetail from "./pages/InvoiceDetail";
 import SettingsPage from "./pages/SettingsPage";
+import AdminPage from "./pages/AdminPage";
+import ClientPortal from "./pages/ClientPortal";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -55,6 +57,8 @@ const App = () => (
               <Route path="/factures/nouveau" element={<CreateInvoice />} />
               <Route path="/factures/:id" element={<InvoiceDetail />} />
               <Route path="/parametres" element={<SettingsPage />} />
+              <Route path="/admin" element={<AdminPage />} />
+              <Route path="/client-portal" element={<ClientPortal />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>

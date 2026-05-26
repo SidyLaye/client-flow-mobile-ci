@@ -1,8 +1,10 @@
+import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Bell, LogOut, Plus, Search, User } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { SidebarTrigger } from "@/components/ui/sidebar";
 import { useNavigate } from "react-router-dom";
+
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -10,14 +12,30 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { mockNotifications } from "@/lib/mock-data";
-import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { SidebarTrigger } from "@/components/ui/sidebar";
 import { useAuth } from "@/contexts/AuthContext";
+import { api } from "@/lib/api";
+import type { AppNotification } from "@/lib/api-types";
 
 export function TopBar() {
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
-  const unreadCount = mockNotifications.filter((n) => !n.isRead).length;
+
+  const notifQuery = useQuery({
+    queryKey: ["notifications"],
+    queryFn: () => api.notifications.list(),
+    retry: false,
+    refetchInterval: 60_000,
+  });
+
+  const items = useMemo<AppNotification[]>(() => {
+    const data = notifQuery.data;
+    if (!data) return [];
+    return Array.isArray(data) ? data : data.results;
+  }, [notifQuery.data]);
+
+  const unreadCount = items.filter((n) => !n.is_read).length;
 
   return (
     <header className="h-14 flex items-center justify-between border-b border-border bg-card px-4 gap-4 shrink-0">
@@ -49,10 +67,20 @@ export function TopBar() {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-80">
-            {mockNotifications.slice(0, 5).map((notif) => (
-              <DropdownMenuItem key={notif.id} className="flex flex-col items-start gap-0.5 py-2.5">
+            {items.length === 0 && (
+              <DropdownMenuItem disabled className="text-xs text-muted-foreground">
+                Aucune notification
+              </DropdownMenuItem>
+            )}
+            {items.slice(0, 5).map((notif) => (
+              <DropdownMenuItem
+                key={notif.id}
+                className="flex flex-col items-start gap-0.5 py-2.5"
+              >
                 <span className="text-sm font-medium">{notif.title}</span>
-                <span className="text-xs text-muted-foreground">{notif.body}</span>
+                <span className="text-xs text-muted-foreground line-clamp-2">
+                  {notif.message}
+                </span>
               </DropdownMenuItem>
             ))}
           </DropdownMenuContent>
