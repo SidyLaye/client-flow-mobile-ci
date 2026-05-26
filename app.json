@@ -1,0 +1,55 @@
+{
+  "expo": {
+    "name": "ComptaFlow Client",
+    "slug": "comptaflow-client",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "scheme": "comptaflow",
+    "splash": {
+      "backgroundColor": "#0F1F36",
+      "resizeMode": "contain"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "bundleIdentifier": "com.comptaflow.client",
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "Cette application utilise l'appareil photo pour scanner vos documents comptables.",
+        "NSPhotoLibraryUsageDescription": "Cette application accède à votre galerie pour téléverser des documents.",
+        "NSPhotoLibraryAddUsageDescription": "Cette application enregistre les PDF générés dans votre galerie."
+      }
+    },
+    "android": {
+      "package": "com.comptaflow.client",
+      "adaptiveIcon": {
+        "backgroundColor": "#0F1F36"
+      },
+      "permissions": ["CAMERA", "READ_EXTERNAL_STORAGE", "WRITE_EXTERNAL_STORAGE"]
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Autorisez l'accès à l'appareil photo pour scanner vos documents."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Autorisez l'accès à la galerie pour téléverser des documents."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#1E5BCC"
+        }
+      ]
+    ],
+    "extra": {
+      "supabaseUrl": "",
+      "supabaseAnonKey": ""
+    }
+  }
+}
