@@ -15,6 +15,7 @@ export interface User {
   last_name: string;
   phone: string;
   date_joined: ISODatetime;
+  is_superuser: boolean;
 }
 
 export type EntrepreneurRole =
