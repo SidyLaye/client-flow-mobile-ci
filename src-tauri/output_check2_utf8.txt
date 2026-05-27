@@ -1,0 +1,130 @@
+﻿cargo :    Compiling 
+proc-macro2 v1.0.106
+Au caractère Ligne:1 : 
+54
++ ... ERPROFILE\.cargo\
+bin;$env:PATH"; cargo 
+check > 
+output_check2.txt 2>&1
++                      
+                ~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~
+    + CategoryInfo     
+         : NotSpecifi  
+  ed: (   Compiling    
+ proc-macro2 v1.0.1    
+06:String) [], Rem    
+oteException
+    + FullyQualifiedEr 
+   rorId : NativeComm  
+  andError
+ 
+   Compiling quote 
+v1.0.45
+   Compiling syn 
+v2.0.117
+   Compiling 
+synstructure v0.13.2
+   Compiling 
+zerofrom-derive v0.1.7
+   Compiling 
+yoke-derive v0.8.2
+   Compiling 
+serde_core v1.0.228
+   Compiling 
+zerovec-derive v0.11.3
+   Compiling 
+serde_derive v1.0.228
+   Compiling 
+ppv-lite86 v0.2.21
+   Compiling 
+displaydoc v0.2.5
+   Compiling 
+rand_chacha v0.3.1
+   Compiling rand 
+v0.8.6
+   Compiling zerofrom 
+v0.1.7
+   Compiling serde 
+v1.0.228
+   Compiling yoke 
+v0.8.2
+   Compiling smallvec 
+v1.15.1
+   Compiling 
+phf_generator v0.11.3
+   Compiling zerovec 
+v0.11.6
+   Compiling 
+thiserror-impl v2.0.18
+   Compiling tinystr 
+v0.8.3
+   Compiling 
+icu_locale_core v2.2.0
+   Compiling 
+darling_core v0.23.0
+   Compiling thiserror 
+v2.0.18
+   Compiling 
+potential_utf v0.1.5
+   Compiling 
+phf_macros v0.11.3
+   Compiling zerotrie 
+v0.2.4
+   Compiling 
+icu_collections v2.2.0
+   Compiling 
+icu_provider v2.2.0
+   Compiling 
+darling_macro v0.23.0
+   Compiling syn 
+v1.0.109
+   Compiling 
+rand_chacha v0.2.2
+   Compiling 
+thiserror-impl v1.0.69
+    Checking 
+stable_deref_trait 
+v1.2.1
+   Compiling rand 
+v0.7.3
+   Compiling darling 
+v0.23.0
+   Compiling 
+serde_json v1.0.149
+   Compiling getrandom 
+v0.4.2
+   Compiling 
+icu_properties v2.2.0
+   Compiling 
+icu_normalizer v2.2.0
+   Compiling 
+phf_generator v0.10.0
+   Compiling 
+serde_with_macros 
+v3.18.0
+   Compiling 
+phf_generator v0.8.0
+   Compiling 
+parking_lot_core 
+v0.9.12
+   Compiling 
+windows-sys v0.61.2
+error: failed to write 
+C:\Users\moura\Download
+s\client-flow-main\clie
+nt-flow-main\target\deb
+ug\deps\libwindows_sys-
+e74293482e37f6f0.rmeta:
+ Le processus ne peut 
+pas acc├®der au 
+fichier car ce fichier 
+est utilis├® par un 
+autre processus. (os 
+error 32)
+
+error: could not 
+compile `windows-sys` 
+(lib) due to 1 
+previous error
