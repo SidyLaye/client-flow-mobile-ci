@@ -9,8 +9,13 @@ The current Tauri desktop app is for **cabinet admins** (role `admin` or
 the cabinet (`Client` records, plus optional auth users linked via the
 client-access mechanism).
 
-Backend base URL: `http://localhost:8000` in dev. In production, expose your
-Django server behind HTTPS and point the mobile at `https://api.your-domain.fr`.
+**Backend base URL:**
+- Production / staging (OVH): `https://test.allinone.ovh`
+- Local dev: `http://localhost:8000` (run `docker compose up` in `a2t-expertise/`)
+
+The mobile app should expose this in its config (env var or `config.ts`) and
+default to `https://test.allinone.ovh` so end-clients hit the deployed server
+without any setup.
 
 ---
 
@@ -241,7 +246,7 @@ git clone https://github.com/derradji-mourad/client-flow-mobile.git
 
 Then in `client-flow-mobile`:
 
-1. Find where the API base URL is configured (likely a `config.ts`, `.env`, or `services/api.ts` file). Set it to the same Django URL as the desktop (`http://192.168.1.42:8000` for LAN testing, `https://api.your-domain.fr` for prod).
+1. Find where the API base URL is configured (likely a `config.ts`, `.env`, or `services/api.ts` file). Set it to the same Django URL as the desktop (`https://test.allinone.ovh` for staging/prod, or `http://192.168.1.42:8000` for local LAN testing).
 2. Verify the JWT auth flow uses the same `/api/v1/auth/login/` endpoint.
 3. Once a real client account exists (see section 5), test login on the mobile with those credentials.
 
