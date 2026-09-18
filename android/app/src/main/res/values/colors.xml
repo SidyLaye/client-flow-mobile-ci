@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Brand background (#0F1F36) and primary (#1E5BCC) from app_theme.dart -->
+    <color name="splash_background">#0F1F36</color>
+    <color name="notification_accent">#1E5BCC</color>
+</resources>

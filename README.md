@@ -1,131 +1,120 @@
-# ComptaFlow Client — Mobile App
+# ComptaFlow Client — Mobile App (Flutter)
 
-React Native (Expo) companion app for the **client side** of [ComptaFlow](../client-flow-main). Clients sign in with credentials issued by their accountant (*comptable*) and can scan, upload, and message documents straight from their phone.
+Flutter companion app for the **client side** of [ComptaFlow](../client-flow-main), built with the **BLoC architecture** (`flutter_bloc`). Clients sign in with credentials issued by their accountant (*comptable*) and can scan, upload, and message documents straight from their phone.
+
+> This is the Flutter port of the former Expo / React Native app. Feature set, screens, copy and backend contract are unchanged; only the push provider moved from Expo Push to Firebase Cloud Messaging (see [Push notifications](#push-notifications-fcm)).
 
 ## Features
 
-- **Login** with the email/password issued by the accounting firm. Sessions are restored on app launch (Supabase Auth + AsyncStorage).
+- **Login** with the email/password issued by the accounting firm. Sessions persist and are restored on launch (`supabase_flutter`).
 - **Home** — quick overview of open requests, pending documents, and unread notifications.
 - **Documents** — list visible documents with status badges; tap to open the file (signed URL → native share sheet).
-- **Document requests** — see what the accountant is asking for, with priorities, due dates, and a one-tap "Reply with a document" CTA.
-- **Scan to PDF** (CamScanner-style) — native edge detection + perspective correction (VisionKit on iOS / ML Kit on Android via `react-native-document-scanner-plugin`), multi-page capture, library/file picker fallback, and PDF generation via `expo-print`.
-- **Push notifications** — `expo-notifications` registers an Expo push token per device; the Supabase Edge Function `send-push-notification` is wired to `notifications` table inserts via a Database Webhook and ships pushes to all devices for the recipient.
-- **Upload review** — name the file, pick a category, add a comment, and upload to the `client-documents` Supabase bucket. Metadata is registered through the `create-document-record` Edge Function (with a direct-insert fallback respecting the existing RLS policy).
+- **Document requests** — see what the accountant is asking for, with priorities, due dates, and a one-tap "Répondre avec un document" CTA.
+- **Scan to PDF** (CamScanner-style) — native edge detection + perspective correction (VisionKit on iOS / ML Kit on Android via `cunning_document_scanner`), multi-page capture, gallery/file picker fallback, PDF generation with the pure-Dart `pdf` package.
+- **Upload review** — name the file, pick a category, add a comment, and upload to the `client-documents` bucket. Metadata is registered through the `create-document-record` Edge Function (with a direct-insert fallback respecting the existing RLS policy).
 - **Messaging** — per-client conversation, hides internal staff notes, realtime updates via Supabase channel.
 - **Notifications** — list of recent notifications with realtime inserts and tap-to-mark-read.
+- **Push notifications** — FCM token per device stored in `push_tokens`.
 - **Profile** — sign out.
 
-## Project structure
+## Architecture
+
+Feature-first layout; every feature is split into `data` (models + repository over Supabase), `bloc` (Bloc + sealed events + immutable `Equatable` state) and `presentation` (widgets only — no Supabase calls in the UI).
 
 ```
-client-flow-mobile/
-├── App.tsx                       # Providers + NavigationContainer
-├── app.json                      # Expo config (iOS/Android perms, plugins)
-├── babel.config.js
-├── tsconfig.json
-├── .env.example
-└── src/
-    ├── lib/
-    │   ├── supabase.ts           # Supabase client (AsyncStorage session)
-    │   ├── pdf.ts                # Build PDF from images (expo-print)
-    │   └── theme.ts              # Colors / radius / spacing
-    ├── contexts/
-    │   └── AuthContext.tsx       # Session + client_account loader
-    ├── navigation/
-    │   ├── RootNavigator.tsx     # Auth gate + stack
-    │   └── MainTabs.tsx          # 5 bottom tabs
-    └── screens/
-        ├── LoginScreen.tsx
-        ├── HomeScreen.tsx
-        ├── DocumentsScreen.tsx
-        ├── DocumentDetailScreen.tsx
-        ├── RequestsScreen.tsx
-        ├── RequestDetailScreen.tsx
-        ├── ScanDocumentScreen.tsx
-        ├── UploadReviewScreen.tsx
-        ├── MessagesScreen.tsx
-        └── ProfileScreen.tsx
+lib/
+├── main.dart                      # Supabase + push init, runApp
+├── app.dart                       # Composition root: repositories → AuthBloc → router
+├── core/
+│   ├── config/env.dart            # SUPABASE_URL / SUPABASE_ANON_KEY (--dart-define)
+│   ├── supabase/supabase_service.dart
+│   ├── theme/app_theme.dart       # Colors / radius / spacing tokens + ThemeData
+│   ├── router/
+│   │   ├── app_router.dart        # go_router: auth redirect + StatefulShellRoute tabs
+│   │   ├── main_shell.dart        # Bottom-tab scaffold
+│   │   ├── routes.dart            # Path constants + UploadReviewArgs
+│   │   ├── refresh_on_focus.dart  # useFocusEffect equivalent
+│   │   └── navigation.dart        # popToTop()
+│   ├── utils/formatters.dart
+│   └── widgets/                   # PrimaryButton, StatusBadge, dialogs, …
+└── features/
+    ├── auth/        AuthBloc — session + client_accounts gate, sign in/out
+    ├── home/        HomeBloc — dashboard counters
+    ├── documents/   DocumentsBloc (list) · DocumentDetailBloc (detail + open)
+    ├── requests/    RequestsBloc (list) · RequestDetailBloc
+    ├── messages/    MessagesBloc — history + realtime + send
+    ├── profile/     ProfileBloc — company, notifications (realtime), mark read
+    ├── scan/        ScanBloc — native scanner / gallery / file picker
+    ├── upload/      UploadBloc — PDF build → storage upload → documents row
+    └── push/        PushService (abstract) · FirebasePushService · NoopPushService
 ```
+
+### State flow
+
+```
+Widget ──event──▶ Bloc ──▶ Repository ──▶ SupabaseService
+   ▲                │
+   └────state───────┘   (BlocBuilder / BlocListener for one-shot effects)
+```
+
+- `AuthBloc` is app-scoped (provided in `app.dart`). Its state drives the router's `redirect` through `refreshListenable`: no session or a non-`active` `client_accounts` row ⇒ `/login`.
+- Every other bloc is page-scoped (`BlocProvider` in the page widget) and receives `clientId` / `userId` from `AuthBloc` at creation time.
+- One-shot effects (alerts, navigation after upload, PDF hand-off from the file picker) are modelled as nullable state fields consumed by a `BlocListener`, then cleared with an explicit `…Consumed` event.
+- Realtime subscriptions (`messages`, `notifications`) are exposed by repositories as `Stream`s and owned by the bloc, which cancels them in `close()`.
 
 ## How it integrates with the existing backend
 
-This app reuses the **same Supabase project** as `client-flow-main`. Nothing new on the backend side is required because:
+This app reuses the **same Supabase project** as `client-flow-main`:
 
 - The `clients` table already exposes a `Clients can read own client record` RLS policy (joins via `client_accounts`).
 - The `documents` table already allows clients to `INSERT` rows for their own client and to `SELECT` rows where `visible_to_client = true`.
 - Storage bucket `client-documents` is partitioned by `{client_id}/...`, which is the path used by the upload flow.
 - The `messages` and `notifications` tables already support per-client realtime via `client_id` / `user_id` filters.
-- The Edge Function `create-document-record` is invoked when present; otherwise the app falls back to a direct insert, both of which are RLS-checked.
+- The Edge Functions `create-document-record` and `send-message` are invoked when present; otherwise the app falls back to a direct insert, both of which are RLS-checked.
 
-> The accountant creates the client portal account from the web app (`create-client-access` Edge Function). That flow provisions the `auth.users`, `profiles`, role, and `client_accounts` rows — the mobile app does **not** need any signup screen.
+> The accountant creates the client portal account from the web app (`create-client-access` Edge Function). The mobile app does **not** need a signup screen.
 
 ## Getting started
 
 ```bash
 cd client-flow-mobile
-npm install              # or: bun install
-cp .env.example .env     # fill in your Supabase URL + anon key
-npm run start            # opens Expo dev tools — scan QR with Expo Go, or run on simulator
+flutter pub get
+cp .env.example .env          # fill in your Supabase URL + anon key
+flutter run --dart-define-from-file=.env
 ```
 
 ### Env vars
 
-The app reads `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY` (matches Expo's public env convention). They must be the same values used by the web app — see `client-flow-main/.env`.
+The app reads `SUPABASE_URL` and `SUPABASE_ANON_KEY` at compile time via `--dart-define-from-file=.env` (or individual `--dart-define` flags). They must be the same values used by the web app — see `client-flow-main/.env`. Add the same flag to `flutter build`.
 
-### Permissions
+### Requirements
 
-`app.json` already declares the required permissions and prompts:
+- Flutter ≥ 3.47 / Dart ≥ 3.13
+- Android: `minSdk 24` (ML Kit document scanner), permissions declared in `android/app/src/main/AndroidManifest.xml`
+- iOS: deployment target 15.0, usage strings declared in `ios/Runner/Info.plist` (`NSCameraUsageDescription`, `NSPhotoLibraryUsageDescription`, `NSPhotoLibraryAddUsageDescription`)
 
-- iOS: `NSCameraUsageDescription`, `NSPhotoLibraryUsageDescription`
-- Android: `CAMERA`, `READ_EXTERNAL_STORAGE`, `WRITE_EXTERNAL_STORAGE`
+### Push notifications (FCM)
 
-### EAS dev client (required)
+The Expo push service is not available outside Expo, so the app registers an **FCM registration token** in `push_tokens` (`platform` = `android` / `ios`). Firebase is optional at runtime: without config the app logs `[push] Firebase not configured` and push becomes a no-op.
 
-The native document scanner and push notifications both ship native code, so **the app no longer runs in plain Expo Go**. Use an EAS *dev client* during development:
+1. Create a Firebase project and run `dart pub global activate flutterfire_cli && flutterfire configure` inside `client-flow-mobile` (generates `lib/firebase_options.dart`, `android/app/google-services.json`, `ios/Runner/GoogleService-Info.plist` — all git-ignored), then pass the generated options to `Firebase.initializeApp` in `lib/features/push/firebase_push_service.dart`.
+2. On iOS enable *Push Notifications* + *Background Modes → Remote notifications* in Xcode and upload the APNs key to Firebase.
+3. **Backend change required:** update the `send-push-notification` Edge Function to send through the FCM HTTP v1 API instead of `https://exp.host/--/api/v2/push/send`, keeping the same `data` payload (`document_id` / `request_id`) — the app deep-links on tap using those keys.
+4. The Database Webhook on `notifications` → `send-push-notification` stays as documented in `client-flow-main`.
 
-```bash
-npm install -g eas-cli
-eas login
-eas build --profile development --platform ios       # or android
-# Install the resulting build on your device, then:
-npm run start --dev-client
-```
-
-For TestFlight / Play Console builds:
+## Build & test
 
 ```bash
-eas build --platform ios
-eas build --platform android
+flutter analyze
+flutter test
+flutter build apk --dart-define-from-file=.env
+flutter build ipa --dart-define-from-file=.env
 ```
 
-### Push notification setup (one-time, on the backend)
-
-1. **Apply the new migration** that creates `push_tokens`:
-   ```bash
-   cd ../client-flow-main
-   npx supabase db push
-   ```
-2. **Deploy the new Edge Function** that ships push messages:
-   ```bash
-   npx supabase functions deploy send-push-notification
-   ```
-3. *(Optional)* Set an Expo access token if you want enhanced delivery receipts:
-   ```bash
-   npx supabase secrets set EXPO_ACCESS_TOKEN=<token from expo.dev>
-   ```
-4. **Configure a Database Webhook** in the Supabase dashboard:
-   - Database → Webhooks → *Create a new hook*
-   - Table: `notifications`
-   - Events: `Insert`
-   - Type: *Supabase Edge Functions* → select `send-push-notification`
-   - HTTP method: `POST`
-
-   Once enabled, every row inserted into `notifications` (by any of the existing edge functions like `send-document-request`, `send-message`, `send-invoice`) will fan out to every registered device for the target user.
-
-5. **Permission prompt on the phone:** the first sign-in triggers `Notifications.requestPermissionsAsync()`. If the user denies it, run the device's Settings → ComptaFlow Client → Notifications to re-enable.
+Bloc tests live in `test/features/**` (`bloc_test` + `mocktail`) and cover the auth gate, scan flow, upload flow, and messaging.
 
 ## Notes / known caveats
 
-- The base64-to-bytes helper in `UploadReviewScreen.tsx` avoids pulling in a `Buffer` polyfill. Replace it with a polyfill if you ever need to upload very large files.
-- Push tokens are device-scoped: a user signing in on a second phone registers a second token, and both phones receive the same notifications. Sign-out cleans up the token only on the device the user signed out of (intentional — the other phone is still authed).
-- `react-native-document-scanner-plugin` requires a real device/simulator with camera support. iOS simulators without a camera will fall through to the gallery / file pickers.
+- Push tokens are device-scoped: signing in on a second phone registers a second token. Sign-out removes only the token of the device that signed out (intentional).
+- `cunning_document_scanner` needs a real device/simulator with a camera. Without one, the automatic launch shows an alert and the user can fall back to *Galerie* / *Fichier*.
+- Images are re-encoded as JPEG (quality 80, ≥1600 px on the short side) before being embedded in the PDF, mirroring the former `expo-image-manipulator` step.
