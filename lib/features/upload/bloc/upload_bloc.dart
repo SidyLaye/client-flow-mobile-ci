@@ -41,7 +41,7 @@ class UploadBloc extends Bloc<UploadEvent, UploadState> {
 
     emit(state.copyWith(status: UploadStatus.submitting, error: () => null));
     try {
-      await _repo.submit(
+      final result = await _repo.submit(
         clientId: _clientId,
         userId: _userId,
         pageUris: _pageUris,
@@ -50,7 +50,10 @@ class UploadBloc extends Bloc<UploadEvent, UploadState> {
         comment: event.comment,
         requestId: requestId,
       );
-      emit(state.copyWith(status: UploadStatus.success));
+      emit(state.copyWith(
+        status: UploadStatus.success,
+        savedPath: result.savedPath,
+      ));
     } catch (e) {
       emit(state.copyWith(
         status: UploadStatus.failure,

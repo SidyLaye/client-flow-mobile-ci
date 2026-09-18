@@ -12,6 +12,7 @@ Flutter companion app for the **client side** of [ComptaFlow](../client-flow-mai
 - **Document requests** — see what the accountant is asking for, with priorities, due dates, and a one-tap "Répondre avec un document" CTA.
 - **Scan to PDF** (CamScanner-style) — native edge detection + perspective correction (VisionKit on iOS / ML Kit on Android via `cunning_document_scanner`), multi-page capture, gallery/file picker fallback, PDF generation with the pure-Dart `pdf` package.
 - **Upload review** — name the file, pick a category, add a comment, and upload to the `client-documents` bucket. Metadata is registered through the `create-document-record` Edge Function (with a direct-insert fallback respecting the existing RLS policy).
+- **On-device copy** — every sent PDF is also kept under the app's Documents folder (`scans/`, visible in the iOS Files app); the success dialog offers to share it right away.
 - **Messaging** — per-client conversation, hides internal staff notes, realtime updates via Supabase channel.
 - **Notifications** — list of recent notifications with realtime inserts and tap-to-mark-read.
 - **Push notifications** — FCM token per device stored in `push_tokens`.

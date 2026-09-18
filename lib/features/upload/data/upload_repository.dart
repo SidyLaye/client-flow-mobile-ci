@@ -5,20 +5,37 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/supabase/supabase_service.dart';
 import '../../../core/utils/formatters.dart';
+import 'local_document_store.dart';
 import 'pdf_builder.dart';
 
+/// Outcome of a successful submission.
+class UploadResult {
+  const UploadResult({required this.fileName, required this.savedPath});
+
+  final String fileName;
+
+  /// Durable on-device copy of the sent PDF.
+  final String savedPath;
+}
+
 class UploadRepository {
-  UploadRepository(this._supabase, {PdfBuilder pdfBuilder = const PdfBuilder()})
-      : _pdf = pdfBuilder;
+  UploadRepository(
+    this._supabase, {
+    PdfBuilder pdfBuilder = const PdfBuilder(),
+    LocalDocumentStore localStore = const LocalDocumentStore(),
+  })  : _pdf = pdfBuilder,
+        _local = localStore;
 
   final SupabaseService _supabase;
   final PdfBuilder _pdf;
+  final LocalDocumentStore _local;
 
   static const bucket = 'client-documents';
 
   /// Full flow: build (or pass through) the PDF, upload it to the client's
-  /// storage folder, then register the `documents` row.
-  Future<void> submit({
+  /// storage folder, register the `documents` row, then keep a copy on the
+  /// device.
+  Future<UploadResult> submit({
     required String clientId,
     required String userId,
     required List<String> pageUris,
@@ -92,6 +109,10 @@ class UploadRepository {
         'visible_to_client': true,
       });
     }
+
+    // 4. Keep a durable copy on the device (temp files can be purged).
+    final saved = await _local.saveCopy(filePath, fileName);
+    return UploadResult(fileName: fileName, savedPath: saved.path);
   }
 
   static bool isSinglePdf(List<String> pageUris) =>

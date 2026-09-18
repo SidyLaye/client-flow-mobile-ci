@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../../core/router/navigation.dart';
 import '../../../core/router/routes.dart';
@@ -80,6 +81,42 @@ class _UploadReviewViewState extends State<_UploadReviewView> {
         ));
   }
 
+  Future<void> _showSuccess(BuildContext context, String? savedPath) async {
+    final share = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Envoyé ✅'),
+        content: Text(
+          savedPath == null
+              ? 'Votre document a été transmis au cabinet.'
+              : 'Votre document a été transmis au cabinet.\n\n'
+                  'Une copie PDF a été enregistrée sur votre appareil.',
+        ),
+        actions: [
+          if (savedPath != null)
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text('Partager'),
+            ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+    if (share == true && savedPath != null) {
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [XFile(savedPath, mimeType: 'application/pdf')],
+          title: _title.text.trim(),
+        ),
+      );
+    }
+    if (context.mounted) popToTop(context);
+  }
+
   @override
   Widget build(BuildContext context) {
     final pages = widget.args.pageUris;
@@ -90,12 +127,7 @@ class _UploadReviewViewState extends State<_UploadReviewView> {
       listener: (context, state) {
         switch (state.status) {
           case UploadStatus.success:
-            showAlert(
-              context,
-              title: 'Envoyé ✅',
-              message: 'Votre document a été transmis au cabinet.',
-              onOk: () => popToTop(context),
-            );
+            _showSuccess(context, state.savedPath);
           case UploadStatus.failure:
             context.read<UploadBloc>().add(const UploadErrorConsumed());
             showAlert(

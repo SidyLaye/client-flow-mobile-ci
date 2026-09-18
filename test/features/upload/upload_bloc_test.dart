@@ -56,7 +56,12 @@ void main() {
           comment: 'RAS',
           requestId: 'req-9',
         ),
-      ).thenAnswer((_) async {});
+      ).thenAnswer(
+        (_) async => const UploadResult(
+          fileName: 'Facture_mars_1.pdf',
+          savedPath: '/docs/scans/Facture_mars_1.pdf',
+        ),
+      );
       return build(requestId: 'req-9');
     },
     act: (b) => b.add(
@@ -68,7 +73,10 @@ void main() {
     ),
     expect: () => [
       const UploadState(status: UploadStatus.submitting),
-      const UploadState(status: UploadStatus.success),
+      const UploadState(
+        status: UploadStatus.success,
+        savedPath: '/docs/scans/Facture_mars_1.pdf',
+      ),
     ],
   );
 
