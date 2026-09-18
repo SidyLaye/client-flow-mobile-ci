@@ -107,10 +107,9 @@ export interface Client {
   updated_at: ISODatetime;
 }
 
-export type ClientCreatePayload = Omit<
-  Client,
-  "id" | "created_at" | "updated_at" | "assigned_user_email"
->;
+// Core identity fields are required; everything else has a server-side default.
+export type ClientCreatePayload = Pick<Client, "company_name" | "first_name" | "last_name" | "email"> &
+  Partial<Omit<Client, "id" | "created_at" | "updated_at" | "assigned_user_email">>;
 
 // ─── Invoices ──────────────────────────────────────────────────────────────
 
@@ -431,4 +430,6 @@ export interface AppNotification {
 export interface Paginated<T> {
   count: number;
   next: string | null;
-  previous: string |
+  previous: string | null;
+  results: T[];
+}

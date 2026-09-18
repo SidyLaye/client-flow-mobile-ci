@@ -28,8 +28,15 @@ export default function ClientPortal() {
 
   const handleSendMessage = async () => {
     if (!message.trim()) return;
+    // The portal user has no explicit client id; derive it from data already loaded for them.
+    const clientId =
+      messagesQuery.data?.results?.[0]?.client ?? documentsQuery.data?.results?.[0]?.client;
+    if (!clientId) {
+      toast.error("Impossible d'identifier votre dossier client");
+      return;
+    }
     try {
-      await api.messages.create({ content: message, is_internal: false });
+      await api.messages.create({ client: clientId, body: message.trim(), is_internal: false });
       toast.success("Message envoye");
       setMessage("");
       messagesQuery.refetch();
