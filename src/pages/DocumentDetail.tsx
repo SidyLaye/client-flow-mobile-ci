@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { api, ApiError } from "@/lib/api";
+import { api, ApiError, downloadFile, fetchFileBlob } from "@/lib/api";
 import type { DocumentStatus } from "@/lib/api-types";
 
 const STATUS_BADGE: Record<
@@ -45,6 +45,7 @@ export default function DocumentDetail() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [comment, setComment] = useState("");
+  const [reason, setReason] = useState("");
   const [textContent, setTextContent] = useState<string | null>(null);
   const [textLoading, setTextLoading] = useState(false);
 
@@ -55,30 +56,55 @@ export default function DocumentDetail() {
     retry: false,
   });
 
+  // Files are protected: fetch with the JWT, preview through a blob URL.
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewError, setPreviewError] = useState(false);
+  const docId = query.data?.id;
+  const docMime = query.data?.mime_type ?? "";
+  const hasFile = Boolean(query.data?.file_url);
+
   useEffect(() => {
-    if (!query.data?.file_url || !isTextMime(query.data.mime_type)) {
-      setTextContent(null);
-      return;
-    }
+    setPreviewUrl(null);
+    setTextContent(null);
+    setPreviewError(false);
+    if (!docId || !hasFile) return;
+    const previewable =
+      docMime.startsWith("image/") || docMime === "application/pdf" || isTextMime(docMime);
+    if (!previewable) return;
+
+    let cancelled = false;
+    let objectUrl: string | null = null;
     setTextLoading(true);
-    fetch(query.data.file_url)
-      .then((r) => {
-        if (!r.ok) throw new Error("Failed to load");
-        return r.text();
+    fetchFileBlob(api.documents.downloadUrl(docId))
+      .then(async (blob) => {
+        if (cancelled) return;
+        if (isTextMime(docMime)) {
+          const text = await blob.text();
+          if (!cancelled) setTextContent(text);
+        } else {
+          // Re-type the blob so the browser renders it inline.
+          objectUrl = URL.createObjectURL(new Blob([blob], { type: docMime }));
+          setPreviewUrl(objectUrl);
+        }
       })
-      .then((t) => setTextContent(t))
-      .catch(() => setTextContent(null))
-      .finally(() => setTextLoading(false));
-  }, [query.data?.file_url, query.data?.mime_type]);
+      .catch(() => !cancelled && setPreviewError(true))
+      .finally(() => !cancelled && setTextLoading(false));
+
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [docId, docMime, hasFile]);
 
   const reviewMutation = useMutation({
     mutationFn: (decision: "validate" | "reject" | "incomplete") =>
-      api.documents.review(id!, decision, comment || undefined),
+      api.documents.review(id!, decision, comment || undefined, reason || undefined),
     onSuccess: () => {
       toast.success("Document mis à jour");
       qc.invalidateQueries({ queryKey: ["documents", id] });
       qc.invalidateQueries({ queryKey: ["documents"] });
       setComment("");
+      setReason("");
     },
     onError: (err: ApiError) => toast.error("Erreur", { description: err.message }),
   });
@@ -86,30 +112,12 @@ export default function DocumentDetail() {
   const handleDownload = async () => {
     if (!query.data?.id) return;
     try {
-      const res = await fetch(
-        `${import.meta.env.VITE_API_URL ?? "http://localhost:8000"}/api/v1/documents/${query.data.id}/download/`,
-        {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("a2t.access") ?? ""}`,
-            "X-Entrepreneur-Id": localStorage.getItem("a2t.entrepreneur_id") ?? "",
-          },
-        }
+      await downloadFile(
+        api.documents.downloadUrl(query.data.id),
+        query.data.original_file_name || query.data.file_name || "document",
       );
-      if (!res.ok) throw new Error("Download failed");
-      const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
-      const disposition = res.headers.get("content-disposition");
-      const filenameMatch = disposition?.match(/filename="?([^"]+)"?/);
-      const filename = filenameMatch?.[1] || query.data.file_name || "document";
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(url);
-    } catch {
-      toast.error("Téléchargement impossible");
+    } catch (e) {
+      toast.error("Téléchargement impossible", { description: (e as Error).message });
     }
   };
 
@@ -145,7 +153,7 @@ export default function DocumentDetail() {
         </Button>
         <div className="flex-1">
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-semibold truncate">{doc.file_name}</h1>
+            <h1 className="text-2xl font-semibold truncate">{doc.original_file_name || doc.file_name}</h1>
             <Badge variant={badge.variant}>{badge.label}</Badge>
           </div>
           <p className="text-sm text-muted-foreground mt-0.5">
@@ -169,14 +177,20 @@ export default function DocumentDetail() {
           </CardHeader>
           <CardContent>
             {doc.file_url ? (
-              doc.mime_type?.startsWith("image/") ? (
-                <img src={doc.file_url} alt={doc.file_name} className="max-h-[600px] mx-auto" />
-              ) : doc.mime_type === "application/pdf" ? (
-                <iframe
-                  src={doc.file_url}
-                  title={doc.file_name}
-                  className="w-full h-[600px] border rounded"
-                />
+              previewError ? (
+                <p className="text-sm text-muted-foreground">
+                  Aperçu indisponible. Téléchargez le fichier pour le consulter.
+                </p>
+              ) : doc.mime_type?.startsWith("image/") || doc.mime_type === "application/pdf" ? (
+                previewUrl ? (
+                  doc.mime_type === "application/pdf" ? (
+                    <iframe src={previewUrl} title={doc.file_name} className="w-full h-[600px] border rounded" />
+                  ) : (
+                    <img src={previewUrl} alt={doc.file_name} className="max-h-[600px] mx-auto" />
+                  )
+                ) : (
+                  <Loader2 className="h-5 w-5 animate-spin mx-auto" />
+                )
               ) : isTextMime(doc.mime_type) ? (
                 textLoading ? (
                   <Loader2 className="h-5 w-5 animate-spin mx-auto" />
@@ -224,6 +238,16 @@ export default function DocumentDetail() {
                   rows={3}
                   value={comment}
                   onChange={(e) => setComment(e.target.value)}
+                />
+              </div>
+              <div>
+                <Label>Motif envoyé au client (si refus ou incomplet)</Label>
+                <Textarea
+                  rows={2}
+                  value={reason}
+                  maxLength={1000}
+                  placeholder="Ex. : la page 2 du relevé manque"
+                  onChange={(e) => setReason(e.target.value)}
                 />
               </div>
             </CardContent>

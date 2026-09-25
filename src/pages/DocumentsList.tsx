@@ -23,7 +23,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { api, ApiError } from "@/lib/api";
+import { api, ApiError, downloadFile } from "@/lib/api";
 import type { DocumentItem, DocumentStatus } from "@/lib/api-types";
 
 const STATUS_BADGE: Record<
@@ -282,11 +282,22 @@ export default function DocumentsList() {
                       <Eye className="h-3.5 w-3.5" />
                     </Button>
                     {doc.file_url && (
-                      <a href={doc.file_url} target="_blank" rel="noreferrer">
-                        <Button variant="ghost" size="icon" className="h-7 w-7">
-                          <Download className="h-3.5 w-3.5" />
-                        </Button>
-                      </a>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        title="Télécharger"
+                        onClick={() =>
+                          downloadFile(
+                            api.documents.downloadUrl(doc.id),
+                            doc.original_file_name || doc.file_name || "document",
+                          ).catch((e: Error) =>
+                            toast.error("Téléchargement impossible", { description: e.message }),
+                          )
+                        }
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                      </Button>
                     )}
                   </div>
                 </td>

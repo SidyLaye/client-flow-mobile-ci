@@ -5,6 +5,8 @@
 import type {
   AppNotification,
   Client,
+  ClientAccessCredentials,
+  ClientAccessState,
   ClientCreatePayload,
   DashboardSummary,
   Deadline,
@@ -181,6 +183,56 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
   return data as T;
 }
 
+// ─── authenticated file download ──────────────────────────────────────────
+// Files are never public: they stream from authenticated endpoints, so they
+// must be fetched with the JWT and turned into a blob URL for <img>, <iframe>
+// or a download. Callers must URL.revokeObjectURL() when done.
+
+export async function fetchFileBlob(url: string): Promise<Blob> {
+  const absolute = url.startsWith("http") ? url : buildUrl(url);
+  const headers: Record<string, string> = {};
+  const access = tokenStore.getAccess();
+  if (access) headers.Authorization = `Bearer ${access}`;
+  const ent = entrepreneurStore.get();
+  if (ent) headers["X-Entrepreneur-Id"] = ent;
+
+  let res = await fetch(absolute, { headers });
+  if (res.status === 401) {
+    const newAccess = await refreshAccessToken();
+    if (newAccess) {
+      headers.Authorization = `Bearer ${newAccess}`;
+      res = await fetch(absolute, { headers });
+    }
+  }
+  if (!res.ok) {
+    const isJson = res.headers.get("content-type")?.includes("application/json");
+    const data = isJson ? await res.json() : null;
+    throw new ApiError(extractMessage(data, `HTTP ${res.status}`), res.status, data);
+  }
+  return res.blob();
+}
+
+/** Downloads a protected file and saves it under `filename`. */
+export async function downloadFile(url: string, filename: string): Promise<void> {
+  const blob = await fetchFileBlob(url);
+  const objectUrl = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = objectUrl;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+}
+
+/** Opens a protected file in a new tab (PDF / image preview). */
+export async function openFile(url: string): Promise<void> {
+  const blob = await fetchFileBlob(url);
+  const objectUrl = URL.createObjectURL(blob);
+  window.open(objectUrl, "_blank", "noopener");
+  setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+}
+
 // ─── Auth ──────────────────────────────────────────────────────────────────
 
 export const auth = {
@@ -244,8 +296,15 @@ export const entrepreneurs = {
 // ─── Clients ───────────────────────────────────────────────────────────────
 
 export const clients = {
-  list: (params?: { search?: string; city?: string; country?: string; page?: number }) =>
-    request<Paginated<Client>>("/api/v1/clients/", { query: params }),
+  list: (params?: {
+    search?: string;
+    city?: string;
+    country?: string;
+    status?: string;
+    page?: number;
+    page_size?: number;
+    ordering?: string;
+  }) => request<Paginated<Client>>("/api/v1/clients/", { query: params }),
   retrieve: (id: UUID) => request<Client>(`/api/v1/clients/${id}/`),
   create: (payload: ClientCreatePayload) =>
     request<Client>("/api/v1/clients/", { method: "POST", body: payload }),
@@ -253,6 +312,28 @@ export const clients = {
     request<Client>(`/api/v1/clients/${id}/`, { method: "PATCH", body: payload }),
   remove: (id: UUID) =>
     request<void>(`/api/v1/clients/${id}/`, { method: "DELETE" }),
+};
+
+// ─── Client mobile-app access (managed by the cabinet) ─────────────────────
+
+export const clientAccess = {
+  get: (clientId: UUID) => request<ClientAccessState>(`/api/v1/clients/${clientId}/access/`),
+  create: (clientId: UUID, payload: { email?: string; password?: string }) =>
+    request<ClientAccessCredentials>(`/api/v1/clients/${clientId}/access/`, {
+      method: "POST",
+      body: payload,
+    }),
+  resetPassword: (clientId: UUID, password?: string) =>
+    request<ClientAccessCredentials>(`/api/v1/clients/${clientId}/access/reset-password/`, {
+      method: "POST",
+      body: password ? { password } : {},
+    }),
+  suspend: (clientId: UUID) =>
+    request<ClientAccessState>(`/api/v1/clients/${clientId}/access/suspend/`, { method: "POST" }),
+  activate: (clientId: UUID) =>
+    request<ClientAccessState>(`/api/v1/clients/${clientId}/access/activate/`, { method: "POST" }),
+  revoke: (clientId: UUID) =>
+    request<void>(`/api/v1/clients/${clientId}/access/`, { method: "DELETE" }),
 };
 
 // ─── Invoices ──────────────────────────────────────────────────────────────
@@ -344,11 +425,14 @@ export const documents = {
     id: UUID,
     decision: "validate" | "reject" | "incomplete",
     internal_comment?: string,
+    /** Shown to the client in its notification (the internal comment never is). */
+    reason?: string,
   ) =>
     request<DocumentItem>(`/api/v1/documents/${id}/review/`, {
       method: "POST",
-      body: { decision, internal_comment: internal_comment ?? "" },
+      body: { decision, internal_comment: internal_comment ?? "", reason: reason ?? "" },
     }),
+  downloadUrl: (id: UUID) => `/api/v1/documents/${id}/download/`,
 };
 
 // ─── Document Requests ────────────────────────────────────────────────────
@@ -369,8 +453,14 @@ export const documentRequests = {
 // ─── Messages ──────────────────────────────────────────────────────────────
 
 export const messages = {
-  list: (params?: { client?: UUID; is_internal?: boolean; search?: string; page?: number }) =>
-    request<Paginated<Message>>("/api/v1/messages/", { query: params }),
+  list: (params?: {
+    client?: UUID;
+    is_internal?: boolean;
+    search?: string;
+    page?: number;
+    page_size?: number;
+    ordering?: string;
+  }) => request<Paginated<Message>>("/api/v1/messages/", { query: params }),
   retrieve: (id: UUID) => request<Message>(`/api/v1/messages/${id}/`),
   create: (payload: MessageCreatePayload) =>
     request<Message>("/api/v1/messages/", { method: "POST", body: payload }),
@@ -433,12 +523,62 @@ export const notifications = {
     }),
 };
 
+// ─── Client portal (a client's own space, same API as the mobile app) ─────
+
+export interface PortalDocument {
+  id: UUID;
+  display_name: string;
+  category: string;
+  category_label: string;
+  status: string;
+  status_label: string;
+  download_url: string | null;
+  created_at: string;
+}
+
+export interface PortalMessage {
+  id: UUID;
+  body: string;
+  sender_name: string;
+  is_mine: boolean;
+  read_at: string | null;
+  created_at: string;
+}
+
+export const clientPortal = {
+  documents: () =>
+    request<Paginated<PortalDocument>>("/api/v1/client-portal/documents/", { noTenant: true }),
+  upload: (file: File, title?: string) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    if (title) fd.append("title", title);
+    return request<PortalDocument>("/api/v1/client-portal/documents/upload/", {
+      method: "POST",
+      body: fd,
+      noTenant: true,
+    });
+  },
+  messages: () =>
+    request<Paginated<PortalMessage>>("/api/v1/client-portal/messages/", {
+      noTenant: true,
+      query: { page_size: 100 },
+    }),
+  sendMessage: (body: string) =>
+    request<PortalMessage>("/api/v1/client-portal/messages/", {
+      method: "POST",
+      body: { body },
+      noTenant: true,
+    }),
+};
+
 // ─── default export ────────────────────────────────────────────────────────
 
 export const api = {
   auth,
   entrepreneurs,
   clients,
+  clientAccess,
+  clientPortal,
   invoices,
   quotes,
   dashboard,

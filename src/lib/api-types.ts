@@ -103,13 +103,29 @@ export interface Client {
   assigned_user: UUID | null;
   assigned_user_email: string | null;
   notes: string;
+  /** State of the client's mobile-app account (read-only). */
+  portal_access?: { has_access: boolean; is_active: boolean; email: string };
   created_at: ISODatetime;
   updated_at: ISODatetime;
 }
 
 // Core identity fields are required; everything else has a server-side default.
 export type ClientCreatePayload = Pick<Client, "company_name" | "first_name" | "last_name" | "email"> &
-  Partial<Omit<Client, "id" | "created_at" | "updated_at" | "assigned_user_email">>;
+  Partial<Omit<Client, "id" | "created_at" | "updated_at" | "assigned_user_email" | "portal_access">>;
+
+export interface ClientAccessState {
+  has_access: boolean;
+  email: string;
+  is_active: boolean;
+  last_login: ISODatetime | null;
+  created_at?: ISODatetime;
+}
+
+/** Returned once, on creation / reset: the password is never readable again. */
+export interface ClientAccessCredentials extends ClientAccessState {
+  password: string;
+  password_generated: boolean;
+}
 
 // ─── Invoices ──────────────────────────────────────────────────────────────
 
@@ -323,6 +339,8 @@ export interface Message {
   related_request: UUID | null;
   read_at: ISODatetime | null;
   created_at: ISODatetime;
+  /** True when written by the client from the mobile app. */
+  from_client?: boolean;
 }
 
 export interface MessageCreatePayload {

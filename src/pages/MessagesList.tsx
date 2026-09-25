@@ -20,7 +20,7 @@ export default function MessagesList() {
 
   const clientsQuery = useQuery({
     queryKey: ["clients", { all: true }],
-    queryFn: () => api.clients.list({}),
+    queryFn: () => api.clients.list({ page_size: 100 }),
     retry: false,
   });
 
@@ -38,9 +38,13 @@ export default function MessagesList() {
 
   const messagesQuery = useQuery({
     queryKey: ["messages", { client: selectedClient }],
-    queryFn: () => api.messages.list({ client: selectedClient! }),
+    // Newest 100 first from the API, displayed oldest → newest.
+    queryFn: () =>
+      api.messages.list({ client: selectedClient!, ordering: "-created_at", page_size: 100 }),
     enabled: Boolean(selectedClient),
     retry: false,
+    // Messages written from the mobile app show up without reloading.
+    refetchInterval: 15_000,
   });
 
   const sendMutation = useMutation({
@@ -63,7 +67,10 @@ export default function MessagesList() {
       qc.invalidateQueries({ queryKey: ["messages", { client: selectedClient }] }),
   });
 
-  const messages = messagesQuery.data?.results ?? [];
+  const messages = useMemo(
+    () => [...(messagesQuery.data?.results ?? [])].reverse(),
+    [messagesQuery.data],
+  );
 
   // Auto-scroll to bottom when messages change.
   useEffect(() => {
@@ -137,7 +144,8 @@ export default function MessagesList() {
               </p>
             )}
             {messages.map((m) => {
-              const isMe = m.sender === user?.id;
+              // Cabinet side on the right, client (mobile app) on the left.
+              const isMe = m.from_client !== undefined ? !m.from_client : m.sender === user?.id;
               return (
                 <div
                   key={m.id}

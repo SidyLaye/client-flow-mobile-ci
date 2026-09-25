@@ -18,6 +18,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import ClientAccessTab from "@/components/client/ClientAccessTab";
 import { api, ApiError } from "@/lib/api";
 
 const fmt = (value: string | number | null | undefined) => {
@@ -143,6 +144,9 @@ export default function ClientDetail() {
           <TabsTrigger value="invoices">Factures ({invoices.length})</TabsTrigger>
           <TabsTrigger value="quotes">Devis ({quotes.length})</TabsTrigger>
           <TabsTrigger value="info">Informations</TabsTrigger>
+          <TabsTrigger value="access">
+            Accès application{c.portal_access?.has_access ? (c.portal_access.is_active ? " ✓" : " (suspendu)") : ""}
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="space-y-4 mt-4">
@@ -285,6 +289,10 @@ export default function ClientDetail() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="access" className="mt-4">
+          <ClientAccessTab clientId={c.id} clientEmail={c.email} />
         </TabsContent>
       </Tabs>
     </div>
