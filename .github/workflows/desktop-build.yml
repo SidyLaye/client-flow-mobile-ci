@@ -48,7 +48,11 @@ jobs:
         shell: bash
         run: |
           f=$(find . -path ./node_modules -prune -o -path '*bundle/nsis/*.exe' -print | head -1)
-          echo "installer: $f"
+          if [ -z "$f" ]; then
+            info=$( (tail -40 build.log; echo '--- exe files:'; find . -path ./node_modules -prune -o -name '*.exe' -path '*release*' -print | head -20) | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')
+            echo "::error title=no-installer::${info}"
+            exit 1
+          fi
           echo "::notice title=installer::$f"
           mkdir -p dist-installer && cp "$f" dist-installer/
 
