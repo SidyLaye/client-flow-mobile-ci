@@ -1,0 +1,54 @@
+name: Desktop build (Windows .exe)
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    env:
+      # Backend used by the installed app.
+      VITE_API_URL: https://test.allinone.ovh
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ". -> target"
+
+      - name: Install
+        run: npm ci --no-audit --no-fund
+
+      - name: Type check
+        run: npx tsc -p tsconfig.app.json --noEmit
+
+      - name: Build installer
+        shell: bash
+        run: |
+          set -o pipefail
+          npx tauri build --bundles nsis 2>&1 | tee build.log
+
+      - name: Report build error
+        if: failure()
+        shell: bash
+        run: |
+          msg=$(grep -v '^\s*$' build.log | tail -80 | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')
+          echo "::error title=build::${msg}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: comptaflow-desktop-windows
+          path: |
+            target/release/bundle/nsis/*.exe
+            src-tauri/target/release/bundle/nsis/*.exe
+          if-no-files-found: error
+          retention-days: 14
