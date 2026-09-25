@@ -1,12 +1,15 @@
 /// Compile-time configuration.
 ///
-/// Values are injected with `--dart-define` / `--dart-define-from-file=.env`
-/// (see `.env.example`). They must match the Supabase project used by the
-/// ComptaFlow web app.
+/// Injected with `--dart-define` / `--dart-define-from-file=.env`
+/// (see `.env.example`). Defaults to the deployed A2T Expertise backend so a
+/// plain `flutter run` works.
 abstract final class Env {
-  static const supabaseUrl = String.fromEnvironment('SUPABASE_URL');
-  static const supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
+  static const apiUrl = String.fromEnvironment(
+    'API_URL',
+    defaultValue: 'https://test.allinone.ovh',
+  );
 
-  static bool get isConfigured =>
-      supabaseUrl.isNotEmpty && supabaseAnonKey.isNotEmpty;
+  /// Interval between two checks for new messages / notifications while the
+  /// matching screen is open (the REST backend has no push channel).
+  static const pollSeconds = int.fromEnvironment('POLL_SECONDS', defaultValue: 10);
 }

@@ -9,20 +9,20 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
-import '../../core/supabase/supabase_service.dart';
+import '../../core/api/api_client.dart';
 import 'push_service.dart';
 
-/// FCM-backed [PushService]. Replaces the Expo push token flow: the token
-/// stored in `push_tokens` is now an FCM registration token, so the
-/// `send-push-notification` Edge Function must ship through FCM HTTP v1.
+/// FCM-backed [PushService]. The FCM registration token of the device is
+/// stored by the backend (`/api/v1/client-portal/push-tokens/`) so the server
+/// can deliver notifications through FCM HTTP v1.
 ///
 /// If Firebase isn't configured (no `google-services.json` /
 /// `GoogleService-Info.plist` / `firebase_options.dart`), initialization logs
 /// a warning and every other method becomes a no-op.
 class FirebasePushService implements PushService {
-  FirebasePushService(this._supabase);
+  FirebasePushService(this._api);
 
-  final SupabaseService _supabase;
+  final ApiClient _api;
   final _local = FlutterLocalNotificationsPlugin();
   final _taps = StreamController<PushTapPayload>.broadcast();
 
@@ -170,17 +170,11 @@ class FirebasePushService implements PushService {
     try {
       final token = await _getToken();
       if (token == null) return;
-
-      await _supabase.from('push_tokens').upsert(
-        {
-          'user_id': userId,
-          'token': token,
-          'platform': Platform.operatingSystem,
-          'device_name': await _deviceName(),
-          'updated_at': DateTime.now().toUtc().toIso8601String(),
-        },
-        onConflict: 'token',
-      );
+      await _api.post('/api/v1/client-portal/push-tokens/', body: {
+        'token': token,
+        'platform': Platform.isIOS ? 'ios' : 'android',
+        'device_name': (await _deviceName()) ?? '',
+      });
     } catch (e) {
       debugPrint('[push] registration failed ${e.toString()}');
     }
@@ -192,11 +186,10 @@ class FirebasePushService implements PushService {
     try {
       final token = await FirebaseMessaging.instance.getToken();
       if (token == null) return;
-      await _supabase
-          .from('push_tokens')
-          .delete()
-          .eq('user_id', userId)
-          .eq('token', token);
+      await _api.delete(
+        '/api/v1/client-portal/push-tokens/',
+        body: {'token': token},
+      );
     } catch (e) {
       debugPrint('[push] unregister failed ${e.toString()}');
     }

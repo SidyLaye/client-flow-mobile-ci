@@ -96,19 +96,13 @@ class _Body extends StatelessWidget {
           ),
         ),
         SizedBox(height: spacing(4)),
-        _gap(KeyValueRow(label: 'Catégorie', value: doc.category ?? '—')),
+        _gap(KeyValueRow(label: 'Catégorie', value: doc.categoryDisplay ?? '—')),
         _gap(KeyValueRow(label: 'Période', value: period)),
-        _gap(KeyValueRow(label: 'Statut', value: doc.status)),
+        _gap(KeyValueRow(label: 'Statut', value: DocumentStatus.label(doc.status))),
         _gap(KeyValueRow(label: 'Type', value: doc.mimeType ?? '—')),
         _gap(KeyValueRow(label: 'Taille', value: formatKb(doc.sizeBytes))),
         if (doc.clientComment case final note? when note.isNotEmpty)
           _gap(_Note(title: 'Votre note', body: note)),
-        if (doc.internalComment case final note? when note.isNotEmpty)
-          _gap(_Note(
-            title: 'Note du cabinet',
-            body: note,
-            borderColor: AppColors.warning,
-          )),
         SizedBox(height: spacing(2)),
         PrimaryButton(
           label: 'Ouvrir le fichier',
@@ -131,17 +125,15 @@ class _Note extends StatelessWidget {
   const _Note({
     required this.title,
     required this.body,
-    this.borderColor = AppColors.border,
   });
 
   final String title;
   final String body;
-  final Color borderColor;
 
   @override
   Widget build(BuildContext context) {
     return SurfaceCard(
-      border: Border.all(color: borderColor),
+      border: Border.all(color: AppColors.border),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

@@ -7,7 +7,7 @@ import 'package:go_router/go_router.dart';
 
 import 'core/router/app_router.dart';
 import 'core/router/routes.dart';
-import 'core/supabase/supabase_service.dart';
+import 'core/api/api_client.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/bloc/auth_bloc.dart';
 import 'features/auth/data/repositories/auth_repository.dart';
@@ -24,26 +24,26 @@ import 'features/upload/data/upload_repository.dart';
 class ComptaFlowApp extends StatelessWidget {
   const ComptaFlowApp({
     super.key,
-    required this.supabase,
+    required this.api,
     required this.pushService,
   });
 
-  final SupabaseService supabase;
+  final ApiClient api;
   final PushService pushService;
 
   @override
   Widget build(BuildContext context) {
     return MultiRepositoryProvider(
       providers: [
-        RepositoryProvider.value(value: supabase),
+        RepositoryProvider.value(value: api),
         RepositoryProvider.value(value: pushService),
-        RepositoryProvider(create: (_) => AuthRepository(supabase)),
-        RepositoryProvider(create: (_) => HomeRepository(supabase)),
-        RepositoryProvider(create: (_) => DocumentsRepository(supabase)),
-        RepositoryProvider(create: (_) => RequestsRepository(supabase)),
-        RepositoryProvider(create: (_) => MessagesRepository(supabase)),
-        RepositoryProvider(create: (_) => NotificationsRepository(supabase)),
-        RepositoryProvider(create: (_) => UploadRepository(supabase)),
+        RepositoryProvider(create: (_) => AuthRepository(api)),
+        RepositoryProvider(create: (_) => HomeRepository(api)),
+        RepositoryProvider(create: (_) => DocumentsRepository(api)),
+        RepositoryProvider(create: (_) => RequestsRepository(api)),
+        RepositoryProvider(create: (_) => MessagesRepository(api)),
+        RepositoryProvider(create: (_) => NotificationsRepository(api)),
+        RepositoryProvider(create: (_) => UploadRepository(api)),
         RepositoryProvider(create: (_) => ScanService()),
       ],
       child: BlocProvider(
@@ -105,8 +105,12 @@ class _AppViewState extends State<_AppView> {
   @override
   Widget build(BuildContext context) {
     return BlocListener<AuthBloc, AuthState>(
-      listenWhen: (prev, curr) => !prev.isAuthed && curr.isAuthed,
+      listenWhen: (prev, curr) => prev.user?.id != curr.user?.id || prev.isAuthed != curr.isAuthed,
       listener: (context, state) {
+        // Lets the conversation tell the client's own messages apart.
+        context.read<MessagesRepository>().currentUserId = state.user?.id ?? '';
+
+        if (!state.isAuthed) return;
         final pending = _pendingTap;
         if (pending == null) return;
         _pendingTap = null;

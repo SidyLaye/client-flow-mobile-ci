@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/router/refresh_on_focus.dart';
 import '../../../core/router/routes.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/states.dart';
 import '../../auth/bloc/auth_bloc.dart';
 import '../bloc/requests_bloc.dart';
@@ -130,7 +131,7 @@ class _RequestRow extends StatelessWidget {
                     SizedBox(height: spacing(1)),
                     Text(
                       req.dueDate != null
-                          ? 'À fournir avant ${req.dueDate}'
+                          ? 'À fournir avant ${formatIsoDate(req.dueDate)}'
                           : 'Sans échéance',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,

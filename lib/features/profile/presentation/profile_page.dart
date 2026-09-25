@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../core/router/routes.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_dialogs.dart';
 import '../../../core/widgets/states.dart';
@@ -67,9 +69,17 @@ class _ProfileView extends StatelessWidget {
               final n = notifs[i - 1];
               return _NotificationRow(
                 notification: n,
-                onTap: () => context
-                    .read<ProfileBloc>()
-                    .add(NotificationReadRequested(n.id)),
+                onTap: () {
+                  context.read<ProfileBloc>().add(NotificationReadRequested(n.id));
+                  // Open what the notification is about.
+                  if (n.documentId case final id?) {
+                    context.push(AppRoutes.documentDetail(id));
+                  } else if (n.requestId case final id?) {
+                    context.push(AppRoutes.requestDetail(id));
+                  } else if (n.link == 'messages') {
+                    context.go(AppRoutes.messages);
+                  }
+                },
               );
             },
           );

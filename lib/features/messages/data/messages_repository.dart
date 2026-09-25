@@ -2,9 +2,9 @@ import 'dart:async';
 
 import 'package:equatable/equatable.dart';
 import 'package:flutter/foundation.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../../core/supabase/supabase_service.dart';
+import '../../../core/api/api_client.dart';
+import '../../../core/config/env.dart';
 
 class Message extends Equatable {
   const Message({
@@ -12,23 +12,34 @@ class Message extends Equatable {
     required this.clientId,
     required this.body,
     this.senderId,
+    this.senderName,
     this.isInternal,
     this.createdAt,
   });
 
   final String id;
   final String clientId;
+
+  /// The current user's id when the client wrote it, `null` for the cabinet.
   final String? senderId;
+  final String? senderName;
   final String body;
   final bool? isInternal;
   final DateTime? createdAt;
 
-  factory Message.fromJson(Map<String, dynamic> json) => Message(
+  /// [currentUserId] identifies the client's own messages (`is_mine`).
+  factory Message.fromPortalJson(
+    Map<String, dynamic> json, {
+    required String clientId,
+    required String currentUserId,
+  }) =>
+      Message(
         id: json['id'] as String,
-        clientId: (json['client_id'] as String?) ?? '',
-        senderId: json['sender_id'] as String?,
+        clientId: clientId,
+        senderId: json['is_mine'] == true ? currentUserId : null,
+        senderName: json['sender_name'] as String?,
         body: (json['body'] as String?) ?? '',
-        isInternal: json['is_internal'] as bool?,
+        isInternal: false,
         createdAt: json['created_at'] == null
             ? null
             : DateTime.tryParse(json['created_at'] as String),
@@ -36,75 +47,131 @@ class Message extends Equatable {
 
   @override
   List<Object?> get props =>
-      [id, clientId, senderId, body, isInternal, createdAt];
+      [id, clientId, senderId, senderName, body, isInternal, createdAt];
 }
 
 class MessagesRepository {
-  MessagesRepository(this._supabase);
+  MessagesRepository(this._api, {Duration? pollInterval})
+      : _poll = pollInterval ?? const Duration(seconds: Env.pollSeconds);
 
-  final SupabaseService _supabase;
+  final ApiClient _api;
+  final Duration _poll;
 
+  static const _base = '/api/v1/client-portal/messages/';
+
+  /// Set by the app once signed in; used to tell the client's own messages
+  /// apart from the cabinet's.
+  String currentUserId = '';
+
+  /// Newest server timestamp seen per conversation: polling asks for what is
+  /// newer (server clock, so a wrong phone clock cannot hide messages).
+  final _lastSeen = <String, DateTime>{};
+  final _live = <String, Set<StreamController<Message>>>{};
+
+  /// Latest 100 messages, oldest first. Opening the conversation marks the
+  /// cabinet's messages as read.
   Future<List<Message>> listConversation(String clientId) async {
-    final rows = await _supabase
-        .from('messages')
-        .select('id, client_id, sender_id, body, is_internal, created_at')
-        .eq('client_id', clientId)
-        .eq('is_internal', false)
-        .order('created_at', ascending: true);
-    return rows.map(Message.fromJson).toList();
+    final data = await _api.get(_base, query: const {'page_size': '100'})
+        as Map<String, dynamic>;
+    final rows = (data['results'] as List).cast<Map<String, dynamic>>();
+    final list = rows
+        .map((r) => Message.fromPortalJson(r, clientId: clientId, currentUserId: currentUserId))
+        .toList()
+        .reversed
+        .toList();
+    final newest = list.isEmpty ? null : list.last.createdAt;
+    if (newest != null) _lastSeen[clientId] = newest;
+    unawaited(_markAllRead());
+    return list;
   }
 
-  /// Realtime INSERTs for this client's conversation. Internal staff notes
-  /// are filtered out.
+  /// New messages while the conversation is open (REST polling: the backend
+  /// has no realtime channel). Stops when the listener cancels.
   Stream<Message> watchInserts(String clientId) {
-    late final RealtimeChannel channel;
-    final controller = StreamController<Message>(
-      onCancel: () => _supabase.client.removeChannel(channel),
+    late final StreamController<Message> controller;
+    Timer? timer;
+    var busy = false;
+
+    Future<void> tick() async {
+      if (busy || controller.isClosed) return;
+      busy = true;
+      try {
+        final since = _lastSeen[clientId] ?? DateTime.utc(1970);
+        final data = await _api.get(
+          _base,
+          query: {'since': since.toUtc().toIso8601String()},
+        ) as Map<String, dynamic>;
+        final rows = (data['results'] as List).cast<Map<String, dynamic>>();
+        var fromCabinet = false;
+        for (final r in rows) {
+          final m = Message.fromPortalJson(
+            r,
+            clientId: clientId,
+            currentUserId: currentUserId,
+          );
+          _remember(clientId, m);
+          if (m.senderId == null) fromCabinet = true;
+          if (!controller.isClosed) controller.add(m);
+        }
+        if (fromCabinet) unawaited(_markAllRead());
+      } catch (e) {
+        debugPrint('[messages] poll failed $e'); // retried at the next tick
+      } finally {
+        busy = false;
+      }
+    }
+
+    controller = StreamController<Message>(
+      onListen: () {
+        _live.putIfAbsent(clientId, () => {}).add(controller);
+        timer = Timer.periodic(_poll, (_) => tick());
+      },
+      // Do not close the controller from its own onCancel: awaiting that
+      // close would wait for this very cancel to finish (deadlock).
+      onCancel: () {
+        timer?.cancel();
+        _live[clientId]?.remove(controller);
+      },
     );
-
-    channel = _supabase.client
-        .channel('messages:$clientId')
-        .onPostgresChanges(
-          event: PostgresChangeEvent.insert,
-          schema: 'public',
-          table: 'messages',
-          filter: PostgresChangeFilter(
-            type: PostgresChangeFilterType.eq,
-            column: 'client_id',
-            value: clientId,
-          ),
-          callback: (payload) {
-            final m = Message.fromJson(payload.newRecord);
-            if (m.isInternal == true) return;
-            if (!controller.isClosed) controller.add(m);
-          },
-        )
-        .subscribe();
-
     return controller.stream;
   }
 
-  /// Sends through the `send-message` Edge Function (audit log + admin
-  /// notification) and falls back to a direct RLS-checked insert.
+  void _remember(String clientId, Message m) {
+    final created = m.createdAt;
+    final last = _lastSeen[clientId];
+    if (created != null && (last == null || created.isAfter(last))) {
+      _lastSeen[clientId] = created;
+    }
+  }
+
+  /// Sends a message to the cabinet. [clientId] / [senderId] are implied by
+  /// the session; they stay in the signature for the bloc.
   Future<void> send({
     required String clientId,
     required String senderId,
     required String body,
   }) async {
+    final data = await _api.post(_base, body: {'body': body});
+    if (data is Map<String, dynamic>) {
+      // Show it right away instead of waiting for the next poll.
+      final m = Message.fromPortalJson(
+        data,
+        clientId: clientId,
+        currentUserId: currentUserId.isNotEmpty ? currentUserId : senderId,
+      );
+      // Not remembered as "last seen": a cabinet message written just before
+      // must still come with the next poll (the bloc ignores duplicates).
+      for (final c in List.of(_live[clientId] ?? const <StreamController<Message>>{})) {
+        if (!c.isClosed) c.add(m);
+      }
+    }
+  }
+
+  Future<void> _markAllRead() async {
     try {
-      await _supabase.invokeFunction<dynamic>('send-message', {
-        'client_id': clientId,
-        'body': body,
-        'is_internal': false,
-      });
+      await _api.post('${_base}mark-all-read/');
     } catch (e) {
-      debugPrint('[messages] edge function failed, direct insert: $e');
-      await _supabase.from('messages').insert({
-        'client_id': clientId,
-        'sender_id': senderId,
-        'body': body,
-        'is_internal': false,
-      });
+      debugPrint('[messages] mark-all-read failed $e');
     }
   }
 }

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/router/routes.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/key_value_row.dart';
 import '../../../core/widgets/primary_button.dart';
 import '../../../core/widgets/states.dart';
@@ -95,17 +96,21 @@ class _Body extends StatelessWidget {
               SizedBox(height: spacing(2)),
               KeyValueRow(
                 label: 'Échéance',
-                value: req.dueDate ?? 'Aucune',
+                value: formatIsoDate(req.dueDate) ?? 'Aucune',
                 card: false,
               ),
               SizedBox(height: spacing(2)),
               KeyValueRow(
                 label: 'Priorité',
-                value: req.priority ?? 'normale',
+                value: RequestPriority.label(req.priority),
                 card: false,
               ),
               SizedBox(height: spacing(2)),
-              KeyValueRow(label: 'Statut', value: req.status, card: false),
+              KeyValueRow(
+                label: 'Statut',
+                value: RequestStatus.label(req.status),
+                card: false,
+              ),
             ],
           ),
         ),

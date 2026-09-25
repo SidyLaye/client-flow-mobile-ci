@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'app.dart';
-import 'core/supabase/supabase_service.dart';
+import 'core/api/api_client.dart';
+import 'core/api/token_store.dart';
+import 'core/config/env.dart';
 import 'features/push/firebase_push_service.dart';
 
 Future<void> main() async {
@@ -12,11 +14,10 @@ Future<void> main() async {
     DeviceOrientation.portraitDown,
   ]);
 
-  await SupabaseService.initialize();
-  const supabase = SupabaseService();
+  final api = ApiClient(baseUrl: Env.apiUrl, tokenStore: SecureTokenStore());
 
-  final push = FirebasePushService(supabase);
+  final push = FirebasePushService(api);
   await push.initialize();
 
-  runApp(ComptaFlowApp(supabase: supabase, pushService: push));
+  runApp(ComptaFlowApp(api: api, pushService: push));
 }

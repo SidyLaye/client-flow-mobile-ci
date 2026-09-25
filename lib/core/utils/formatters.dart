@@ -28,3 +28,11 @@ String safeFileBase(String raw) {
 }
 
 String pluralPages(int n) => '$n page${n > 1 ? 's' : ''}';
+
+/// `YYYY-MM-DD` (as stored by the API) → `DD/MM/YYYY`; `null` if empty.
+String? formatIsoDate(String? iso) {
+  if (iso == null || iso.isEmpty) return null;
+  final d = DateTime.tryParse(iso);
+  if (d == null) return iso;
+  return '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+}

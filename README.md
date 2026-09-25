@@ -1,34 +1,63 @@
 # ComptaFlow Client — Mobile App (Flutter)
 
-Flutter companion app for the **client side** of [ComptaFlow](../client-flow-main), built with the **BLoC architecture** (`flutter_bloc`). Clients sign in with credentials issued by their accountant (*comptable*) and can scan, upload, and message documents straight from their phone.
+Flutter companion app for the **client side** of ComptaFlow / A2T Expertise, built with the **BLoC architecture** (`flutter_bloc`). Clients sign in with credentials issued by their accountant (*comptable*) and can scan, upload, and message documents straight from their phone.
 
-> This is the Flutter port of the former Expo / React Native app. Feature set, screens, copy and backend contract are unchanged; only the push provider moved from Expo Push to Firebase Cloud Messaging (see [Push notifications](#push-notifications-fcm)).
+> Flutter port of the former Expo app, now backed by the Django REST API shared with the cabinet desktop app (Supabase removed).
+
+## Backend
+
+The app talks to the **same Django REST backend as the cabinet desktop app**
+(`a2t-expertise`, deployed on `https://test.allinone.ovh`). Supabase is no
+longer used. Everything goes through the client-scoped API
+`/api/v1/client-portal/`: a client only ever sees its own records.
+
+| Screen | API |
+|---|---|
+| Login | `POST /api/v1/auth/login/` (JWT) then `GET /client-portal/me/` |
+| Home | `GET /client-portal/summary/` |
+| Documents | `GET /client-portal/documents/`, `GET …/<id>/`, `GET …/<id>/download/` |
+| Requests | `GET /client-portal/requests/`, `GET …/<id>/` (marks it *seen*) |
+| Scan & send | `POST /client-portal/documents/upload/` (multipart: file, title, category, client_comment, document_request) |
+| Messages | `GET /client-portal/messages/` (+ `?since=` polling), `POST …/`, `POST …/mark-all-read/` |
+| Notifications | `GET /client-portal/notifications/`, `POST …/<id>/read/` |
+| Push | `POST` / `DELETE /client-portal/push-tokens/` |
+
+Accounts are created by the cabinet from the desktop app (client page →
+*Accès application*). There is no sign-up screen.
 
 ## Features
 
-- **Login** with the email/password issued by the accounting firm. Sessions persist and are restored on launch (`supabase_flutter`).
-- **Home** — quick overview of open requests, pending documents, and unread notifications.
-- **Documents** — list visible documents with status badges; tap to open the file (signed URL → native share sheet).
-- **Document requests** — see what the accountant is asking for, with priorities, due dates, and a one-tap "Répondre avec un document" CTA.
-- **Scan to PDF** (CamScanner-style) — native edge detection + perspective correction (VisionKit on iOS / ML Kit on Android via `cunning_document_scanner`), multi-page capture, gallery/file picker fallback, PDF generation with the pure-Dart `pdf` package.
-- **Upload review** — name the file, pick a category, add a comment, and upload to the `client-documents` bucket. Metadata is registered through the `create-document-record` Edge Function (with a direct-insert fallback respecting the existing RLS policy).
-- **On-device copy** — every sent PDF is also kept under the app's Documents folder (`scans/`, visible in the iOS Files app); the success dialog offers to share it right away.
-- **Messaging** — per-client conversation, hides internal staff notes, realtime updates via Supabase channel.
-- **Notifications** — list of recent notifications with realtime inserts and tap-to-mark-read.
-- **Push notifications** — FCM token per device stored in `push_tokens`.
-- **Profile** — sign out.
+- **Login** with the email/password given by the cabinet. The JWT pair is kept
+  in the OS secure storage (Keychain / Keystore); the access token is refreshed
+  automatically and the app returns to the login screen if the cabinet
+  suspends the access or resets the password.
+- **Home** — open requests, pending documents, unread notifications.
+- **Documents** — documents visible to the client, with status; open/share the
+  file (authenticated download).
+- **Document requests** — what the cabinet asks for, priority, due date, and a
+  one-tap "Répondre avec un document".
+- **Scan to PDF** — native edge detection (VisionKit / ML Kit), multi-page,
+  gallery / file fallback, PDF built on-device.
+- **Upload review** — title, category (same codes as the desktop), comment;
+  sent as the answer to the request when opened from one. A copy is kept on the
+  device (`scans/`).
+- **Messaging** — conversation with the cabinet; new messages checked every
+  `POLL_SECONDS` (default 10 s) while the screen is open.
+- **Notifications** — created by the backend (new request, reminder, document
+  refused/incomplete, new message); tap opens the related item.
 
 ## Architecture
 
-Feature-first layout; every feature is split into `data` (models + repository over Supabase), `bloc` (Bloc + sealed events + immutable `Equatable` state) and `presentation` (widgets only — no Supabase calls in the UI).
+Feature-first layout; every feature is split into `data` (models + repository over the REST API), `bloc` (Bloc + sealed events + immutable `Equatable` state) and `presentation` (widgets only — no API calls in the UI).
 
 ```
 lib/
-├── main.dart                      # Supabase + push init, runApp
+├── main.dart                      # ApiClient + push init, runApp
 ├── app.dart                       # Composition root: repositories → AuthBloc → router
 ├── core/
-│   ├── config/env.dart            # SUPABASE_URL / SUPABASE_ANON_KEY (--dart-define)
-│   ├── supabase/supabase_service.dart
+│   ├── config/env.dart            # API_URL / POLL_SECONDS (--dart-define)
+│   ├── api/api_client.dart        # JWT, refresh, errors (Django REST)
+│   ├── api/token_store.dart       # secure storage of the JWT pair
 │   ├── theme/app_theme.dart       # Colors / radius / spacing tokens + ThemeData
 │   ├── router/
 │   │   ├── app_router.dart        # go_router: auth redirect + StatefulShellRoute tabs
@@ -53,55 +82,48 @@ lib/
 ### State flow
 
 ```
-Widget ──event──▶ Bloc ──▶ Repository ──▶ SupabaseService
+Widget ──event──▶ Bloc ──▶ Repository ──▶ ApiClient
    ▲                │
    └────state───────┘   (BlocBuilder / BlocListener for one-shot effects)
 ```
 
-- `AuthBloc` is app-scoped (provided in `app.dart`). Its state drives the router's `redirect` through `refreshListenable`: no session or a non-`active` `client_accounts` row ⇒ `/login`.
+- `AuthBloc` is app-scoped (provided in `app.dart`). Its state drives the router's `redirect` through `refreshListenable`: no session or a refused session ⇒ `/login`.
 - Every other bloc is page-scoped (`BlocProvider` in the page widget) and receives `clientId` / `userId` from `AuthBloc` at creation time.
 - One-shot effects (alerts, navigation after upload, PDF hand-off from the file picker) are modelled as nullable state fields consumed by a `BlocListener`, then cleared with an explicit `…Consumed` event.
-- Realtime subscriptions (`messages`, `notifications`) are exposed by repositories as `Stream`s and owned by the bloc, which cancels them in `close()`.
-
-## How it integrates with the existing backend
-
-This app reuses the **same Supabase project** as `client-flow-main`:
-
-- The `clients` table already exposes a `Clients can read own client record` RLS policy (joins via `client_accounts`).
-- The `documents` table already allows clients to `INSERT` rows for their own client and to `SELECT` rows where `visible_to_client = true`.
-- Storage bucket `client-documents` is partitioned by `{client_id}/...`, which is the path used by the upload flow.
-- The `messages` and `notifications` tables already support per-client realtime via `client_id` / `user_id` filters.
-- The Edge Functions `create-document-record` and `send-message` are invoked when present; otherwise the app falls back to a direct insert, both of which are RLS-checked.
-
-> The accountant creates the client portal account from the web app (`create-client-access` Edge Function). The mobile app does **not** need a signup screen.
+- New messages / notifications are exposed by repositories as polling `Stream`s, owned by the bloc, which cancels them in `close()`.
 
 ## Getting started
 
 ```bash
 cd client-flow-mobile
 flutter pub get
-cp .env.example .env          # fill in your Supabase URL + anon key
+cp .env.example .env          # API_URL defaults to https://test.allinone.ovh
 flutter run --dart-define-from-file=.env
 ```
 
 ### Env vars
 
-The app reads `SUPABASE_URL` and `SUPABASE_ANON_KEY` at compile time via `--dart-define-from-file=.env` (or individual `--dart-define` flags). They must be the same values used by the web app — see `client-flow-main/.env`. Add the same flag to `flutter build`.
+| Name | Default | |
+|---|---|---|
+| `API_URL` | `https://test.allinone.ovh` | Django backend |
+| `POLL_SECONDS` | `10` | refresh interval for messages (notifications: ×3) |
+
+For a local backend on the LAN use `http://<ip>:8000`; Android then needs
+`android:usesCleartextTraffic="true"` for that debug build only.
 
 ### Requirements
 
 - Flutter ≥ 3.47 / Dart ≥ 3.13
-- Android: `minSdk 24` (ML Kit document scanner), permissions declared in `android/app/src/main/AndroidManifest.xml`
-- iOS: deployment target 15.0, usage strings declared in `ios/Runner/Info.plist` (`NSCameraUsageDescription`, `NSPhotoLibraryUsageDescription`, `NSPhotoLibraryAddUsageDescription`)
+- Android: `minSdk 24`; backups are disabled so the secure storage is never
+  restored on another device.
+- iOS: deployment target 15.0, usage strings in `ios/Runner/Info.plist`.
 
-### Push notifications (FCM)
+### Push notifications (FCM, optional)
 
-The Expo push service is not available outside Expo, so the app registers an **FCM registration token** in `push_tokens` (`platform` = `android` / `ios`). Firebase is optional at runtime: without config the app logs `[push] Firebase not configured` and push becomes a no-op.
-
-1. Create a Firebase project and run `dart pub global activate flutterfire_cli && flutterfire configure` inside `client-flow-mobile` (generates `lib/firebase_options.dart`, `android/app/google-services.json`, `ios/Runner/GoogleService-Info.plist` — all git-ignored), then pass the generated options to `Firebase.initializeApp` in `lib/features/push/firebase_push_service.dart`.
-2. On iOS enable *Push Notifications* + *Background Modes → Remote notifications* in Xcode and upload the APNs key to Firebase.
-3. **Backend change required:** update the `send-push-notification` Edge Function to send through the FCM HTTP v1 API instead of `https://exp.host/--/api/v2/push/send`, keeping the same `data` payload (`document_id` / `request_id`) — the app deep-links on tap using those keys.
-4. The Database Webhook on `notifications` → `send-push-notification` stays as documented in `client-flow-main`.
+The device registers its FCM token with the backend. Without Firebase config
+the app logs `[push] Firebase not configured` and push is a no-op; in-app
+notifications still work. Sending pushes from the backend (FCM HTTP v1) is not
+wired yet.
 
 ## Build & test
 

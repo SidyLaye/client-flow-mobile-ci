@@ -1,10 +1,8 @@
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-
-import '../../../core/supabase/supabase_service.dart';
+import '../../../core/api/api_client.dart';
 import '../../../core/utils/formatters.dart';
+import '../../documents/data/models/document.dart';
 import 'local_document_store.dart';
 import 'pdf_builder.dart';
 
@@ -20,21 +18,24 @@ class UploadResult {
 
 class UploadRepository {
   UploadRepository(
-    this._supabase, {
+    this._api, {
     PdfBuilder pdfBuilder = const PdfBuilder(),
     LocalDocumentStore localStore = const LocalDocumentStore(),
   })  : _pdf = pdfBuilder,
         _local = localStore;
 
-  final SupabaseService _supabase;
+  final ApiClient _api;
   final PdfBuilder _pdf;
   final LocalDocumentStore _local;
 
-  static const bucket = 'client-documents';
+  static const _uploadPath = '/api/v1/client-portal/documents/upload/';
 
-  /// Full flow: build (or pass through) the PDF, upload it to the client's
-  /// storage folder, register the `documents` row, then keep a copy on the
-  /// device.
+  /// Server-side limit (see backend `MAX_UPLOAD_BYTES`).
+  static const maxBytes = 25 * 1024 * 1024;
+
+  /// Full flow: build (or pass through) the PDF, send it to the cabinet
+  /// (optionally as the answer to [requestId]), then keep a copy on the
+  /// device. [clientId] / [userId] are implied by the session.
   Future<UploadResult> submit({
     required String clientId,
     required String userId,
@@ -61,56 +62,30 @@ class UploadRepository {
       fileName = built.fileName;
       size = built.size;
     }
-
-    // 2. Upload to the client-documents bucket ({client_id}/...).
-    final storagePath =
-        '$clientId/${DateTime.now().millisecondsSinceEpoch}_$fileName';
-    await _supabase.storage.from(bucket).upload(
-          storagePath,
-          File(filePath),
-          fileOptions: const FileOptions(
-            contentType: 'application/pdf',
-            upsert: false,
-          ),
-        );
-
-    // 3. Register metadata via the edge function (privileged insert + audit),
-    //    falling back to a direct RLS-checked insert.
-    final originalFileName = '$cleanTitle.pdf';
-    final trimmedComment = comment?.trim();
-    final clientComment =
-        trimmedComment == null || trimmedComment.isEmpty ? null : trimmedComment;
-
-    try {
-      await _supabase.invokeFunction<dynamic>('create-document-record', {
-        'client_id': clientId,
-        'file_name': fileName,
-        'original_file_name': originalFileName,
-        'storage_path': storagePath,
-        'mime_type': 'application/pdf',
-        'size_bytes': size,
-        'category': category,
-        'client_comment': clientComment,
-        'request_id': requestId,
-      });
-    } catch (e) {
-      debugPrint('[upload] edge function failed, direct insert fallback: $e');
-      await _supabase.from('documents').insert({
-        'client_id': clientId,
-        'uploaded_by': userId,
-        'file_name': fileName,
-        'original_file_name': originalFileName,
-        'storage_path': storagePath,
-        'mime_type': 'application/pdf',
-        'size_bytes': size,
-        'category': category,
-        'client_comment': clientComment,
-        'status': 'received',
-        'visible_to_client': true,
-      });
+    if (size > maxBytes) {
+      throw const ApiException(
+        'Le document dépasse 25 Mo. Réduisez le nombre de pages et réessayez.',
+      );
     }
 
-    // 4. Keep a durable copy on the device (temp files can be purged).
+    // 2. Send it: the backend stores it, links it to the request and
+    //    notifies the cabinet.
+    final trimmedComment = comment?.trim() ?? '';
+    await _api.postFile(
+      _uploadPath,
+      fileField: 'file',
+      filePath: filePath,
+      filename: fileName,
+      contentType: 'application/pdf',
+      fields: {
+        'title': cleanTitle,
+        'category': DocumentCategory.codeFor(category),
+        if (trimmedComment.isNotEmpty) 'client_comment': trimmedComment,
+        if (requestId != null && requestId.isNotEmpty) 'document_request': requestId,
+      },
+    );
+
+    // 3. Keep a durable copy on the device (temp files can be purged).
     final saved = await _local.saveCopy(filePath, fileName);
     return UploadResult(fileName: fileName, savedPath: saved.path);
   }

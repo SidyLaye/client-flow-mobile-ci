@@ -1,67 +1,53 @@
 import 'dart:async';
 
 import 'package:bloc_test/bloc_test.dart';
+import 'package:client_flow_mobile/core/api/api_client.dart';
 import 'package:client_flow_mobile/features/auth/bloc/auth_bloc.dart';
 import 'package:client_flow_mobile/features/auth/data/models/client_account.dart';
 import 'package:client_flow_mobile/features/auth/data/repositories/auth_repository.dart';
 import 'package:client_flow_mobile/features/push/push_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
-import 'package:supabase_flutter/supabase_flutter.dart' as supa;
 
 class _MockAuthRepository extends Mock implements AuthRepository {}
 
 class _MockPushService extends Mock implements PushService {}
 
-supa.Session _session(String userId) => supa.Session(
-      accessToken: 'token-$userId',
-      tokenType: 'bearer',
-      user: supa.User(
-        id: userId,
-        appMetadata: const {},
-        userMetadata: const {},
-        aud: 'authenticated',
-        createdAt: '2026-01-01T00:00:00Z',
-      ),
-    );
-
-const _activeAccount = ClientAccount(
-  id: 'ca-1',
-  clientId: 'client-1',
-  userId: 'user-1',
-  accessStatus: 'active',
-);
-
-const _suspendedAccount = ClientAccount(
-  id: 'ca-2',
-  clientId: 'client-1',
-  userId: 'user-1',
-  accessStatus: 'suspended',
+const _identity = PortalIdentity(
+  user: AuthUser(id: 'user-1', email: 'jean@client.fr'),
+  account: ClientAccount(
+    id: 'client-1',
+    clientId: 'client-1',
+    userId: 'user-1',
+    accessStatus: 'active',
+    companyName: 'Client SARL',
+  ),
 );
 
 void main() {
   late _MockAuthRepository repo;
   late _MockPushService push;
-  late StreamController<supa.AuthState> authChanges;
+  late StreamController<void> expired;
 
   setUp(() {
     repo = _MockAuthRepository();
     push = _MockPushService();
-    authChanges = StreamController<supa.AuthState>.broadcast();
-    when(() => repo.onAuthStateChange).thenAnswer((_) => authChanges.stream);
+    expired = StreamController<void>.broadcast();
+    when(() => repo.onSessionExpired).thenAnswer((_) => expired.stream);
+    when(() => repo.signOut()).thenAnswer((_) async {});
     when(() => push.register(any())).thenAnswer((_) async {});
     when(() => push.unregister(any())).thenAnswer((_) async {});
   });
 
-  tearDown(() => authChanges.close());
+  tearDown(() => expired.close());
 
   AuthBloc build() => AuthBloc(authRepository: repo, pushService: push);
 
   group('AuthStarted', () {
     blocTest<AuthBloc, AuthState>(
-      'goes unauthenticated when no persisted session',
+      'goes unauthenticated when nothing is stored',
       build: () {
-        when(() => repo.currentSession).thenReturn(null);
+        when(() => repo.hasStoredSession()).thenAnswer((_) async => false);
         return build();
       },
       act: (b) => b.add(const AuthStarted()),
@@ -74,11 +60,11 @@ void main() {
     );
 
     blocTest<AuthBloc, AuthState>(
-      'restores session, loads client account and registers push',
+      'restores the session from the server and registers push',
       build: () {
-        when(() => repo.currentSession).thenReturn(_session('user-1'));
-        when(() => repo.loadClientAccount('user-1'))
-            .thenAnswer((_) async => _activeAccount);
+        when(() => repo.hasStoredSession()).thenAnswer((_) async => true);
+        when(() => repo.cachedIdentity()).thenAnswer((_) async => null);
+        when(() => repo.fetchIdentity()).thenAnswer((_) async => _identity);
         return build();
       },
       act: (b) => b.add(const AuthStarted()),
@@ -86,82 +72,74 @@ void main() {
         isA<AuthState>()
             .having((s) => s.status, 'status', AuthStatus.authenticated)
             .having((s) => s.clientId, 'clientId', 'client-1')
+            .having((s) => s.user?.email, 'email', 'jean@client.fr')
             .having((s) => s.isAuthed, 'isAuthed', true),
       ],
       verify: (_) => verify(() => push.register('user-1')).called(1),
     );
 
     blocTest<AuthBloc, AuthState>(
-      'a session with a non-active client account is NOT authed',
+      'opens offline with the cached identity',
       build: () {
-        when(() => repo.currentSession).thenReturn(_session('user-1'));
-        when(() => repo.loadClientAccount('user-1'))
-            .thenAnswer((_) async => _suspendedAccount);
+        when(() => repo.hasStoredSession()).thenAnswer((_) async => true);
+        when(() => repo.cachedIdentity()).thenAnswer((_) async => _identity);
+        when(() => repo.fetchIdentity())
+            .thenThrow(const ApiException('Pas de connexion internet.'));
         return build();
       },
       act: (b) => b.add(const AuthStarted()),
       expect: () => [
-        isA<AuthState>()
-            .having((s) => s.status, 'status', AuthStatus.authenticated)
-            .having((s) => s.isAuthed, 'isAuthed', false),
-      ],
-    );
-  });
-
-  group('auth state changes', () {
-    blocTest<AuthBloc, AuthState>(
-      'SIGNED_IN loads the account and registers push',
-      build: () {
-        when(() => repo.currentSession).thenReturn(null);
-        when(() => repo.loadClientAccount('user-1'))
-            .thenAnswer((_) async => _activeAccount);
-        return build();
-      },
-      act: (b) async {
-        b.add(const AuthStarted());
-        await Future<void>.delayed(Duration.zero);
-        authChanges.add(
-          supa.AuthState(supa.AuthChangeEvent.signedIn, _session('user-1')),
-        );
-      },
-      skip: 1,
-      expect: () => [
         isA<AuthState>().having((s) => s.isAuthed, 'isAuthed', true),
       ],
-      verify: (_) => verify(() => push.register('user-1')).called(1),
     );
 
     blocTest<AuthBloc, AuthState>(
-      'SIGNED_OUT clears session and account',
+      'a revoked session (401) signs out even with a cache',
       build: () {
-        when(() => repo.currentSession).thenReturn(_session('user-1'));
-        when(() => repo.loadClientAccount('user-1'))
-            .thenAnswer((_) async => _activeAccount);
+        when(() => repo.hasStoredSession()).thenAnswer((_) async => true);
+        when(() => repo.cachedIdentity()).thenAnswer((_) async => _identity);
+        when(() => repo.fetchIdentity()).thenThrow(
+          const ApiException('Votre session a expiré.', statusCode: 401),
+        );
         return build();
       },
-      act: (b) async {
-        b.add(const AuthStarted());
-        await Future<void>.delayed(Duration.zero);
-        authChanges.add(
-          const supa.AuthState(supa.AuthChangeEvent.signedOut, null),
-        );
-      },
-      skip: 1,
+      act: (b) => b.add(const AuthStarted()),
       expect: () => [
+        isA<AuthState>().having((s) => s.isAuthed, 'isAuthed', true),
         isA<AuthState>()
             .having((s) => s.status, 'status', AuthStatus.unauthenticated)
-            .having((s) => s.session, 'session', isNull)
-            .having((s) => s.clientAccount, 'clientAccount', isNull),
+            .having((s) => s.user, 'user', isNull),
       ],
     );
   });
+
+  blocTest<AuthBloc, AuthState>(
+    'session expiry from the API client signs out with a message',
+    build: () {
+      when(() => repo.hasStoredSession()).thenAnswer((_) async => true);
+      when(() => repo.cachedIdentity()).thenAnswer((_) async => null);
+      when(() => repo.fetchIdentity()).thenAnswer((_) async => _identity);
+      return build();
+    },
+    act: (b) async {
+      b.add(const AuthStarted());
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+      expired.add(null);
+    },
+    skip: 1,
+    expect: () => [
+      isA<AuthState>()
+          .having((s) => s.status, 'status', AuthStatus.unauthenticated)
+          .having((s) => s.signInError, 'signInError', isNotNull),
+    ],
+  );
 
   group('AuthSignInRequested', () {
     blocTest<AuthBloc, AuthState>(
-      'toggles signingIn and surfaces AuthException message',
+      'toggles signingIn and surfaces the API message',
       build: () {
         when(() => repo.signIn(email: 'a@b.fr', password: 'bad')).thenThrow(
-          const supa.AuthException('Invalid login credentials'),
+          const ApiException('Email ou mot de passe incorrect.', statusCode: 401),
         );
         return build();
       },
@@ -174,15 +152,33 @@ void main() {
         isA<AuthState>()
             .having((s) => s.signingIn, 'signingIn', false)
             .having((s) => s.signInError, 'signInError',
-                'Invalid login credentials'),
+                'Email ou mot de passe incorrect.'),
       ],
     );
 
     blocTest<AuthBloc, AuthState>(
-      'succeeds silently (session arrives through onAuthStateChange)',
+      'a cabinet (staff) account is refused',
+      build: () {
+        when(() => repo.signIn(email: 'staff@cab.fr', password: 'ok'))
+            .thenThrow(const NotAClientAccountException());
+        return build();
+      },
+      act: (b) => b.add(
+        const AuthSignInRequested(email: 'staff@cab.fr', password: 'ok'),
+      ),
+      expect: () => [
+        isA<AuthState>().having((s) => s.signingIn, 'signingIn', true),
+        isA<AuthState>()
+            .having((s) => s.isAuthed, 'isAuthed', false)
+            .having((s) => s.signInError, 'signInError', contains('espace client')),
+      ],
+    );
+
+    blocTest<AuthBloc, AuthState>(
+      'succeeds, authenticates and registers push',
       build: () {
         when(() => repo.signIn(email: 'a@b.fr', password: 'ok'))
-            .thenAnswer((_) async {});
+            .thenAnswer((_) async => _identity);
         return build();
       },
       act: (b) =>
@@ -191,30 +187,30 @@ void main() {
         isA<AuthState>().having((s) => s.signingIn, 'signingIn', true),
         isA<AuthState>()
             .having((s) => s.signingIn, 'signingIn', false)
-            .having((s) => s.signInError, 'signInError', isNull),
+            .having((s) => s.isAuthed, 'isAuthed', true),
       ],
+      verify: (_) => verify(() => push.register('user-1')).called(1),
     );
   });
 
   blocTest<AuthBloc, AuthState>(
     'AuthSignOutRequested unregisters push before signing out',
     build: () {
-      when(() => repo.currentSession).thenReturn(_session('user-1'));
-      when(() => repo.loadClientAccount('user-1'))
-          .thenAnswer((_) async => _activeAccount);
-      when(() => repo.signOut()).thenAnswer((_) async {});
+      when(() => repo.signIn(email: 'a@b.fr', password: 'ok'))
+          .thenAnswer((_) async => _identity);
       return build();
     },
     act: (b) async {
-      b.add(const AuthStarted());
-      await Future<void>.delayed(Duration.zero);
+      b.add(const AuthSignInRequested(email: 'a@b.fr', password: 'ok'));
+      await Future<void>.delayed(const Duration(milliseconds: 10));
       b.add(const AuthSignOutRequested());
     },
-    verify: (_) {
+    verify: (b) {
       verifyInOrder([
         () => push.unregister('user-1'),
         () => repo.signOut(),
       ]);
+      expect(b.state.status, AuthStatus.unauthenticated);
     },
   );
 }

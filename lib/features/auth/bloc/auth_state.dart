@@ -5,39 +5,38 @@ enum AuthStatus { unknown, authenticated, unauthenticated }
 final class AuthState extends Equatable {
   const AuthState({
     this.status = AuthStatus.unknown,
-    this.session,
+    this.user,
     this.clientAccount,
     this.signingIn = false,
     this.signInError,
   });
 
   final AuthStatus status;
-  final Session? session;
+  final AuthUser? user;
   final ClientAccount? clientAccount;
   final bool signingIn;
 
   /// Last sign-in failure message; cleared on the next attempt.
   final String? signInError;
 
-  User? get user => session?.user;
   String? get clientId => clientAccount?.clientId;
 
-  /// The app is usable only with a session AND an active client account.
+  /// The app is usable only with a user AND an active client account.
   bool get isAuthed =>
       status == AuthStatus.authenticated &&
-      session != null &&
+      user != null &&
       (clientAccount?.isActive ?? false);
 
   AuthState copyWith({
     AuthStatus? status,
-    Session? Function()? session,
+    AuthUser? Function()? user,
     ClientAccount? Function()? clientAccount,
     bool? signingIn,
     String? Function()? signInError,
   }) {
     return AuthState(
       status: status ?? this.status,
-      session: session != null ? session() : this.session,
+      user: user != null ? user() : this.user,
       clientAccount:
           clientAccount != null ? clientAccount() : this.clientAccount,
       signingIn: signingIn ?? this.signingIn,
@@ -46,6 +45,5 @@ final class AuthState extends Equatable {
   }
 
   @override
-  List<Object?> get props =>
-      [status, session?.accessToken, clientAccount, signingIn, signInError];
+  List<Object?> get props => [status, user, clientAccount, signingIn, signInError];
 }

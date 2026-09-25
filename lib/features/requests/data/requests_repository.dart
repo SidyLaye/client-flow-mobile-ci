@@ -1,26 +1,29 @@
-import '../../../core/supabase/supabase_service.dart';
+import '../../../core/api/api_client.dart';
 import 'models/document_request.dart';
 
 class RequestsRepository {
-  RequestsRepository(this._supabase);
+  RequestsRepository(this._api);
 
-  final SupabaseService _supabase;
+  final ApiClient _api;
 
+  static const _base = '/api/v1/client-portal/requests/';
+
+  /// Requests the cabinet sent to this client (drafts and cancelled excluded).
   Future<List<DocumentRequest>> listForClient(String clientId) async {
-    final rows = await _supabase
-        .from('document_requests')
-        .select('id, title, description, due_date, priority, status, created_at')
-        .eq('client_id', clientId)
-        .order('created_at', ascending: false);
+    final data = await _api.get(_base, query: const {'page_size': '100'})
+        as Map<String, dynamic>;
+    final rows = (data['results'] as List).cast<Map<String, dynamic>>();
     return rows.map(DocumentRequest.fromJson).toList();
   }
 
+  /// Opening a request marks it as seen for the cabinet.
   Future<DocumentRequest?> getById(String id) async {
-    final row = await _supabase
-        .from('document_requests')
-        .select('id, title, description, requested_type, due_date, priority, status')
-        .eq('id', id)
-        .maybeSingle();
-    return row == null ? null : DocumentRequest.fromJson(row);
+    try {
+      final data = await _api.get('$_base$id/') as Map<String, dynamic>;
+      return DocumentRequest.fromJson(data);
+    } on ApiException catch (e) {
+      if (e.statusCode == 404) return null;
+      rethrow;
+    }
   }
 }

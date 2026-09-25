@@ -7,20 +7,14 @@ sealed class AuthEvent extends Equatable {
   List<Object?> get props => [];
 }
 
-/// Restore the persisted session on app launch and start listening.
+/// Restore the persisted session on app launch.
 final class AuthStarted extends AuthEvent {
   const AuthStarted();
 }
 
-/// Internal: forwarded from Supabase's `onAuthStateChange` stream.
-final class _AuthSessionChanged extends AuthEvent {
-  const _AuthSessionChanged(this.event, this.session);
-
-  final AuthChangeEvent event;
-  final Session? session;
-
-  @override
-  List<Object?> get props => [event, session?.accessToken];
+/// Internal: the backend refused the refresh token.
+final class _AuthSessionExpired extends AuthEvent {
+  const _AuthSessionExpired();
 }
 
 final class AuthSignInRequested extends AuthEvent {

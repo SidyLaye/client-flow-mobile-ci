@@ -108,7 +108,7 @@ class _DocumentRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final sub = [doc.category, formatPeriod(doc.periodMonth, doc.periodYear)]
+    final sub = [doc.categoryDisplay, formatPeriod(doc.periodMonth, doc.periodYear)]
         .whereType<String>()
         .where((s) => s.isNotEmpty)
         .join(' • ');

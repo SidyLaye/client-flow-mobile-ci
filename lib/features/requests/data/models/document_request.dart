@@ -64,3 +64,15 @@ abstract final class RequestStatus {
 
   static String label(String status) => labels[status] ?? status;
 }
+
+abstract final class RequestPriority {
+  static const labels = <String, String>{
+    'low': 'Basse',
+    'normal': 'Normale',
+    'high': 'Haute',
+    'urgent': 'Urgente',
+  };
+
+  static String label(String? priority) =>
+      labels[priority ?? 'normal'] ?? (priority ?? 'Normale');
+}

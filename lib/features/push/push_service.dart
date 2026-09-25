@@ -9,10 +9,19 @@ class PushTapPayload extends Equatable {
 
   bool get isEmpty => documentId == null && requestId == null;
 
-  factory PushTapPayload.fromData(Map<String, dynamic> data) => PushTapPayload(
-        documentId: data['document_id']?.toString(),
-        requestId: data['request_id']?.toString(),
-      );
+  /// Accepts `document_id` / `request_id` keys or a backend notification
+  /// `link` (`document:<id>`, `request:<id>`).
+  factory PushTapPayload.fromData(Map<String, dynamic> data) {
+    final link = data['link']?.toString() ?? '';
+    String? fromLink(String kind) =>
+        link.startsWith('$kind:') && link.length > kind.length + 1
+            ? link.substring(kind.length + 1)
+            : null;
+    return PushTapPayload(
+      documentId: data['document_id']?.toString() ?? fromLink('document'),
+      requestId: data['request_id']?.toString() ?? fromLink('request'),
+    );
+  }
 
   @override
   List<Object?> get props => [documentId, requestId];

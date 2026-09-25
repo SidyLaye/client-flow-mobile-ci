@@ -11,16 +11,12 @@ import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/app_dialogs.dart';
 import '../../../core/widgets/primary_button.dart';
 import '../../auth/bloc/auth_bloc.dart';
+import '../../documents/data/models/document.dart';
 import '../bloc/upload_bloc.dart';
 import '../data/upload_repository.dart';
 
-const kDocumentCategories = [
-  'Facture',
-  'Relevé bancaire',
-  'Note de frais',
-  'Contrat',
-  'Autre',
-];
+/// Labels shown to the client; mapped to the backend codes on upload.
+final kDocumentCategories = DocumentCategory.labels.values.toList(growable: false);
 
 class UploadReviewPage extends StatelessWidget {
   const UploadReviewPage({super.key, required this.args});
@@ -55,7 +51,7 @@ class _UploadReviewView extends StatefulWidget {
 class _UploadReviewViewState extends State<_UploadReviewView> {
   late final TextEditingController _title;
   final _comment = TextEditingController();
-  String _category = 'Autre';
+  String _category = DocumentCategory.labels[DocumentCategory.defaultCode]!;
 
   @override
   void initState() {
