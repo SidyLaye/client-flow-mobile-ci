@@ -44,11 +44,17 @@ jobs:
           msg=$(grep -v '^\s*$' build.log | tail -80 | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')
           echo "::error title=build::${msg}"
 
+      - name: Locate installer
+        shell: bash
+        run: |
+          f=$(find . -path ./node_modules -prune -o -path '*bundle/nsis/*.exe' -print | head -1)
+          echo "installer: $f"
+          echo "::notice title=installer::$f"
+          mkdir -p dist-installer && cp "$f" dist-installer/
+
       - uses: actions/upload-artifact@v4
         with:
           name: comptaflow-desktop-windows
-          path: |
-            target/release/bundle/nsis/*.exe
-            src-tauri/target/release/bundle/nsis/*.exe
+          path: dist-installer/*.exe
           if-no-files-found: error
           retention-days: 14
