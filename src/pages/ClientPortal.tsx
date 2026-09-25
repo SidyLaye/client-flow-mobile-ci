@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { api, openFile } from "@/lib/api";
+import { api, downloadFile } from "@/lib/api";
 
 /**
  * Web version of the client's space. Uses the same /client-portal/ API as the
@@ -97,12 +97,12 @@ export default function ClientPortal() {
                     variant="outline"
                     size="sm"
                     onClick={() =>
-                      openFile(doc.download_url!).catch((e: Error) =>
-                        toast.error("Ouverture impossible", { description: e.message }),
+                      downloadFile(doc.download_url!, doc.display_name).catch((e: Error) =>
+                        toast.error("Téléchargement impossible", { description: e.message }),
                       )
                     }
                   >
-                    <Paperclip className="h-3.5 w-3.5 mr-1" /> Voir
+                    <Paperclip className="h-3.5 w-3.5 mr-1" /> Télécharger
                   </Button>
                 )}
               </CardContent>

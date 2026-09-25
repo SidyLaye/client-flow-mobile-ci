@@ -225,14 +225,6 @@ export async function downloadFile(url: string, filename: string): Promise<void>
   setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
 }
 
-/** Opens a protected file in a new tab (PDF / image preview). */
-export async function openFile(url: string): Promise<void> {
-  const blob = await fetchFileBlob(url);
-  const objectUrl = URL.createObjectURL(blob);
-  window.open(objectUrl, "_blank", "noopener");
-  setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
-}
-
 // ─── Auth ──────────────────────────────────────────────────────────────────
 
 export const auth = {
