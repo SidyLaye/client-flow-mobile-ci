@@ -11,6 +11,8 @@ jobs:
     env:
       # Backend used by the installed app.
       VITE_API_URL: https://test.allinone.ovh
+      # src-tauri/.cargo/config.toml points target-dir at a local desktop path.
+      CARGO_TARGET_DIR: ${{ github.workspace }}/target
     steps:
       - uses: actions/checkout@v4
 
