@@ -1,0 +1,44 @@
+name: Flutter CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Versions
+        run: flutter --version
+
+      - name: Dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Tests
+        run: flutter test
+
+      - name: Build APK (release, test backend)
+        run: flutter build apk --release --dart-define=API_URL=https://test.allinone.ovh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: comptaflow-client-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          retention-days: 14
