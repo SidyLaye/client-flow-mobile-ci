@@ -10,6 +10,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import '../../core/api/api_client.dart';
+import '../../core/config/env.dart';
 import 'push_service.dart';
 
 /// FCM-backed [PushService]. The FCM registration token of the device is
@@ -35,13 +36,29 @@ class FirebasePushService implements PushService {
     ledColor: Color(0xFF1E5BCC),
   );
 
+  /// Firebase options passed with `--dart-define`, or null to let the native
+  /// config files (`google-services.json` / `GoogleService-Info.plist`) apply.
+  static FirebaseOptions? _optionsFromEnv() {
+    final appId = Platform.isIOS ? Env.firebaseIosAppId : Env.firebaseAndroidAppId;
+    if (Env.firebaseProjectId.isEmpty || Env.firebaseApiKey.isEmpty || appId.isEmpty) {
+      return null;
+    }
+    return FirebaseOptions(
+      apiKey: Env.firebaseApiKey,
+      appId: appId,
+      messagingSenderId: Env.firebaseSenderId,
+      projectId: Env.firebaseProjectId,
+      iosBundleId: Platform.isIOS ? 'com.comptaflow.client' : null,
+    );
+  }
+
   @override
   Stream<PushTapPayload> get onNotificationTap => _taps.stream;
 
   @override
   Future<void> initialize() async {
     try {
-      await Firebase.initializeApp();
+      await Firebase.initializeApp(options: _optionsFromEnv());
       _enabled = true;
     } catch (e) {
       debugPrint(

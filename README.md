@@ -122,8 +122,20 @@ For a local backend on the LAN use `http://<ip>:8000`; Android then needs
 
 The device registers its FCM token with the backend. Without Firebase config
 the app logs `[push] Firebase not configured` and push is a no-op; in-app
-notifications still work. Sending pushes from the backend (FCM HTTP v1) is not
-wired yet.
+notifications still work. The backend sends each new notification to the
+user's devices through FCM HTTP v1 (`FCM_CREDENTIALS` on the Django side), so it
+shows up even when the app is closed.
+
+To enable it:
+
+1. Create a Firebase project and add an Android app `com.comptaflow.client`
+   (and an iOS app with the same bundle id).
+2. Pass the app's values with `--dart-define` (see `.env.example`):
+   `FIREBASE_PROJECT_ID`, `FIREBASE_SENDER_ID`, `FIREBASE_API_KEY`,
+   `FIREBASE_ANDROID_APP_ID`, `FIREBASE_IOS_APP_ID`. CI reads them from the
+   repository secrets of the same names.
+3. iOS only: enable *Push Notifications* in Xcode and upload the APNs key to
+   Firebase.
 
 ## Build & test
 
