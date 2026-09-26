@@ -31,26 +31,21 @@ Install the following on your Windows machine, in order:
 
 ## 2. Configure environment
 
-Copy `.env.example` to `.env` and fill in your Supabase credentials:
+Copy `.env.example` to `.env` and set the Django backend URL:
 
 ```env
-VITE_SUPABASE_URL="https://YOUR-PROJECT-ID.supabase.co"
-VITE_SUPABASE_PUBLISHABLE_KEY="YOUR-ANON-KEY"
-VITE_SUPABASE_PROJECT_ID="YOUR-PROJECT-ID"
+VITE_API_URL="https://test.allinone.ovh"
 ```
 
-You get these values at:
-**Supabase Dashboard → your project → Settings → API**.
-
-If you haven't yet provisioned Supabase, see `README.md`'s "Database Setup"
-and "Deploy Edge Functions" sections, then come back here.
+Use `http://localhost:8000` to point at a backend running on your machine.
+The value is baked into the build: rebuild after changing it.
 
 ## 3. Install JS dependencies
 
 From the project root in PowerShell:
 
 ```powershell
-cd C:\Users\sarrs\Documents\mourad\a2t-frontend
+cd chemin\vers\A2TExpertise
 npm install
 ```
 
@@ -91,6 +86,13 @@ You'll find:
 The first build is slow (Rust compiles every dependency). Subsequent builds
 take 30–90 seconds.
 
+### Or let GitHub build it
+
+Every push runs `.github/workflows/desktop-build.yml` on a Windows runner.
+Download the installer from the run's **Artifacts** (`comptaflow-desktop-windows`).
+`src-tauri/.cargo/config.toml` points `target-dir` at a local folder; the
+workflow overrides it with `CARGO_TARGET_DIR`.
+
 ## 6. Code-signing (optional, for distribution)
 
 Out of the box the `.exe` is **unsigned**, so Windows SmartScreen will warn
@@ -105,22 +107,21 @@ https://v2.tauri.app/distribute/sign/windows/
 | `npm install` fails on `@swc/core` | Re-run; SWC sometimes fails on first download. If it persists, delete `node_modules` and `package-lock.json`, then `npm install` again. |
 | `cargo` not found | Re-open PowerShell after installing Rust. |
 | `link.exe not found` | Install "Desktop development with C++" in Visual Studio Build Tools. |
-| Blank window on launch | The Supabase env vars are missing or wrong. Check `.env` and rebuild. |
-| Window opens but says "Failed to fetch" | Your Supabase project's edge functions aren't deployed, or its URL is wrong. |
+| Window opens but says "Failed to fetch" | `VITE_API_URL` is wrong or the backend is down. Check `.env` and rebuild. |
+| No Windows notification | Allow notifications for ComptaFlow in Windows Settings → System → Notifications, and keep the app open or minimized (a closed app receives nothing). |
 | WebView2 missing on older Windows | Install from the link in step 1.4. |
 
 ## 8. Project structure recap
 
 ```
-a2t-frontend/
 ├── src/                # React app (TypeScript + Tailwind + shadcn/ui)
 │   ├── pages/          # Route components
-│   ├── components/     # Shared UI
-│   ├── contexts/       # AuthContext (Supabase)
-│   └── integrations/   # Supabase client
-├── supabase/           # Migrations + edge functions (deploy with supabase CLI)
+│   ├── components/     # Shared UI (TopBar = notifications)
+│   ├── contexts/       # AuthContext (JWT + selected firm)
+│   ├── hooks/          # use-desktop-notifications (Windows notifications)
+│   └── lib/            # api.ts — typed client for the Django REST API
 └── src-tauri/          # Rust shell + Tauri config
-    ├── src/            # Rust entry (lib.rs, main.rs)
+    ├── src/            # Rust entry (lib.rs: opener + notification plugins)
     ├── icons/          # App icons (.ico + .png)
     ├── capabilities/   # Tauri permissions (default.json)
     └── tauri.conf.json # Window size, identifier, bundler targets

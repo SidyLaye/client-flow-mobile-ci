@@ -73,3 +73,18 @@ Catégories : `purchase_invoice`, `sales_invoice`, `bank_statement`, `contract`,
   motif saisi dans « Motif envoyé au client », jamais le commentaire interne).
 - Le client écrit → le comptable assigné (sinon owners/admins/comptables) est notifié.
 - Les fichiers ne sont jamais publics : ils passent par les routes `…/download/`.
+
+## Notifications push
+
+- Chaque notification créée pour un utilisateur qui a enregistré un téléphone
+  (`/client-portal/push-tokens/`) est envoyée par une tâche Celery via
+  **FCM HTTP v1**, après validation de la transaction. Elle s'affiche même
+  application fermée ; un appui ouvre le document ou la demande
+  (`data.link`, `data.notification_id`).
+- Les jetons que FCM déclare invalides sont supprimés automatiquement.
+- Activation côté serveur : variable `FCM_CREDENTIALS` = JSON du compte de
+  service Firebase (sur une ligne, ou chemin d'un fichier). Vide = push
+  désactivé, les notifications restent visibles dans les applications.
+- Le desktop ne reçoit pas de push : il relit `/api/v1/notifications/` toutes
+  les 60 s et affiche une notification Windows pour chaque nouvelle entrée.
+
