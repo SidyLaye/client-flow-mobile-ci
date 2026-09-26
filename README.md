@@ -45,6 +45,9 @@ Accounts are created by the cabinet from the desktop app (client page →
   `POLL_SECONDS` (default 10 s) while the screen is open.
 - **Notifications** — created by the backend (new request, reminder, document
   refused/incomplete, new message); tap opens the related item.
+- **Push notifications** — the same notifications arrive as Android system
+  notifications through Firebase Cloud Messaging, even when the app is closed
+  (see [Push notifications](#push-notifications-fcm)).
 
 ## Architecture
 
@@ -55,7 +58,7 @@ lib/
 ├── main.dart                      # ApiClient + push init, runApp
 ├── app.dart                       # Composition root: repositories → AuthBloc → router
 ├── core/
-│   ├── config/env.dart            # API_URL / POLL_SECONDS (--dart-define)
+│   ├── config/env.dart            # API_URL / POLL_SECONDS / Firebase (--dart-define)
 │   ├── api/api_client.dart        # JWT, refresh, errors (Django REST)
 │   ├── api/token_store.dart       # secure storage of the JWT pair
 │   ├── theme/app_theme.dart       # Colors / radius / spacing tokens + ThemeData
@@ -72,10 +75,10 @@ lib/
     ├── home/        HomeBloc — dashboard counters
     ├── documents/   DocumentsBloc (list) · DocumentDetailBloc (detail + open)
     ├── requests/    RequestsBloc (list) · RequestDetailBloc
-    ├── messages/    MessagesBloc — history + realtime + send
-    ├── profile/     ProfileBloc — company, notifications (realtime), mark read
+    ├── messages/    MessagesBloc — history + polling + send
+    ├── profile/     ProfileBloc — company, notifications (polling), mark read
     ├── scan/        ScanBloc — native scanner / gallery / file picker
-    ├── upload/      UploadBloc — PDF build → storage upload → documents row
+    ├── upload/      UploadBloc — PDF build → multipart upload to the backend
     └── push/        PushService (abstract) · FirebasePushService · NoopPushService
 ```
 
@@ -107,6 +110,7 @@ flutter run --dart-define-from-file=.env
 |---|---|---|
 | `API_URL` | `https://test.allinone.ovh` | Django backend |
 | `POLL_SECONDS` | `10` | refresh interval for messages (notifications: ×3) |
+| `FIREBASE_*` | project `mourad-7bf2a` | Firebase app used for push (see below) |
 
 For a local backend on the LAN use `http://<ip>:8000`; Android then needs
 `android:usesCleartextTraffic="true"` for that debug build only.
@@ -118,22 +122,42 @@ For a local backend on the LAN use `http://<ip>:8000`; Android then needs
   restored on another device.
 - iOS: deployment target 15.0, usage strings in `ios/Runner/Info.plist`.
 
-### Push notifications (FCM, optional)
+### Push notifications (FCM)
 
-The device registers its FCM token with the backend. Without Firebase config
-the app logs `[push] Firebase not configured` and push is a no-op; in-app
-notifications still work. The backend sends each new notification to the
-user's devices through FCM HTTP v1 (`FCM_CREDENTIALS` on the Django side), so it
-shows up even when the app is closed.
+How a notification reaches a closed app:
 
-The Android app of the Firebase project `mourad-7bf2a` is built in
-(`lib/core/config/env.dart`), so every build has push enabled. To use another
-Firebase project, pass `FIREBASE_PROJECT_ID`, `FIREBASE_SENDER_ID`,
-`FIREBASE_API_KEY`, `FIREBASE_ANDROID_APP_ID` (and `FIREBASE_IOS_APP_ID`) with
-`--dart-define` (see `.env.example`).
+```
+cabinet action (message, request…) ─▶ Django creates a Notification
+  ─▶ Celery task ─▶ FCM HTTP v1 ─▶ Android shows it ─▶ tap opens the item
+```
 
-iOS only: enable *Push Notifications* in Xcode and upload the APNs key to
-Firebase.
+1. At sign-in the app asks for the notification permission and registers the
+   device's FCM token with `POST /client-portal/push-tokens/`; sign-out
+   removes it.
+2. The backend pushes every new notification of that user to their devices
+   (`title`, `message`, and `data.link` / `data.notification_id` used for the
+   deep link). Tokens FCM reports as unregistered are deleted.
+3. With the app in the foreground, Android shows it through
+   `flutter_local_notifications` (channel `default`).
+
+Configuration:
+
+- **App** — the Android app of the Firebase project `mourad-7bf2a` is built in
+  (`lib/core/config/env.dart`): every build, local or CI, has push enabled.
+  These identifiers are public by design (they ship in the APK). To use another
+  Firebase project, pass `FIREBASE_PROJECT_ID`, `FIREBASE_SENDER_ID`,
+  `FIREBASE_API_KEY`, `FIREBASE_ANDROID_APP_ID` (and `FIREBASE_IOS_APP_ID`)
+  with `--dart-define` (see `.env.example`).
+- **Backend** — `FCM_CREDENTIALS` = the Firebase service-account key (Firebase
+  console → Project settings → Service accounts → Generate new private key),
+  on one line, in the Dokploy *Environment* tab; the `celery` worker must run.
+  This key is secret: never commit it.
+- **iOS** — enable *Push Notifications* in Xcode, add an iOS app to the
+  Firebase project, upload the APNs key to Firebase and pass
+  `FIREBASE_IOS_APP_ID`.
+
+If Firebase cannot start, the app logs `[push] Firebase not configured` and
+push is a no-op; in-app notifications still work.
 
 ## Build & test
 
@@ -143,6 +167,14 @@ flutter test
 flutter build apk --dart-define-from-file=.env
 flutter build ipa --dart-define-from-file=.env
 ```
+
+### APK from GitHub Actions
+
+Every push runs `.github/workflows/flutter-ci.yml`: `flutter analyze`,
+`flutter test`, then a release APK against `https://test.allinone.ovh`.
+Download it from the run's **Artifacts** (`comptaflow-client-apk`, kept 14
+days). Release builds are signed with the debug key for now; uninstall a
+previously installed build if Android refuses the update.
 
 Bloc tests live in `test/features/**` (`bloc_test` + `mocktail`) and cover the auth gate, scan flow, upload flow, and messaging.
 
