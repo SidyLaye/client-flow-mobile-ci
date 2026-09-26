@@ -2,7 +2,7 @@
 
 Flutter companion app for the **client side** of ComptaFlow / A2T Expertise, built with the **BLoC architecture** (`flutter_bloc`). Clients sign in with credentials issued by their accountant (*comptable*) and can scan, upload, and message documents straight from their phone.
 
-> Flutter port of the former Expo app, now backed by the Django REST API shared with the cabinet desktop app (Supabase removed).
+> Part of the repository that also holds the cabinet desktop app (`../desktop`): see the [root README](../README.md).
 
 ## Backend
 
@@ -98,7 +98,7 @@ Widget ──event──▶ Bloc ──▶ Repository ──▶ ApiClient
 ## Getting started
 
 ```bash
-cd client-flow-mobile
+cd mobile
 flutter pub get
 cp .env.example .env          # API_URL defaults to https://test.allinone.ovh
 flutter run --dart-define-from-file=.env
@@ -170,7 +170,8 @@ flutter build ipa --dart-define-from-file=.env
 
 ### APK from GitHub Actions
 
-Every push runs `.github/workflows/flutter-ci.yml`: `flutter analyze`,
+Every push that touches `mobile/` runs `.github/workflows/mobile.yml` (at the
+repository root): `flutter analyze`,
 `flutter test`, then a release APK against `https://test.allinone.ovh`.
 Download it from the run's **Artifacts** (`comptaflow-client-apk`, kept 14
 days). Release builds are signed with the debug key for now; uninstall a

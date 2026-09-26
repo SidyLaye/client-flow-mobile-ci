@@ -45,7 +45,7 @@ The value is baked into the build: rebuild after changing it.
 From the project root in PowerShell:
 
 ```powershell
-cd chemin\vers\A2TExpertise
+cd chemin\vers\le-depot\desktop
 npm install
 ```
 
@@ -77,7 +77,7 @@ What happens:
 1. Vite builds the front-end into `dist/`.
 2. Tauri compiles the Rust shell against `dist/`.
 3. The Windows bundler emits installers under
-   `src-tauri\target\release\bundle\`.
+   `target\release\bundle\` (the Cargo workspace root is `desktop/`).
 
 You'll find:
 - `bundle\nsis\ComptaFlow_0.1.0_x64-setup.exe` — NSIS installer (smaller, recommended)
@@ -88,10 +88,9 @@ take 30–90 seconds.
 
 ### Or let GitHub build it
 
-Every push runs `.github/workflows/desktop-build.yml` on a Windows runner.
-Download the installer from the run's **Artifacts** (`comptaflow-desktop-windows`).
-`src-tauri/.cargo/config.toml` points `target-dir` at a local folder; the
-workflow overrides it with `CARGO_TARGET_DIR`.
+Every push that touches `desktop/` runs `.github/workflows/desktop.yml` (at the
+repository root) on a Windows runner. Download the installer from the run's
+**Artifacts** (`comptaflow-desktop-windows`).
 
 ## 6. Code-signing (optional, for distribution)
 

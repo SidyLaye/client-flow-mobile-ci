@@ -1,0 +1,18 @@
+name: E2E (API déployée)
+# Manuel uniquement : crée un cabinet et un client de test sur le serveur.
+on:
+  workflow_dispatch:
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install requests
+      - name: Run
+        run: python e2e/e2e.py > out.txt 2>&1 || true
+      - name: Report
+        if: always()
+        shell: bash
+        run: |
+          msg=$(tail -60 out.txt | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')
+          if ! grep -q 'checks passed' out.txt || grep -q FAIL out.txt; then echo "::error title=e2e::${msg}"; exit 1; else echo "::notice title=e2e::${msg}"; fi

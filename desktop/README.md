@@ -10,8 +10,8 @@ du cabinet utilisent l'application mobile Flutter.
 - **Backend** : API Django REST `a2t-expertise`, déployée sur
   `https://test.allinone.ovh` (Dokploy). Le même backend sert le mobile.
 
-Supabase n'est plus utilisé : le dossier `supabase/` et
-`src/integrations/supabase/` sont des restes de l'ancienne version.
+Ce dossier fait partie du dépôt qui contient aussi l'app mobile
+(`../mobile`) : voir le [README à la racine](../README.md).
 
 ## Sommaire
 
@@ -90,13 +90,12 @@ Vérifications :
 npx tsc -p tsconfig.app.json --noEmit   # types
 npm run lint
 npm test                                # Vitest
-npx playwright test                     # E2E
 ```
 
 ## Construire l'installateur Windows
 
 **Par GitHub Actions (recommandé)** : chaque push lance
-`.github/workflows/desktop-build.yml` sur Windows (types, build Vite, build
+`.github/workflows/desktop.yml` (à la racine du dépôt) sur Windows (types, build Vite, build
 Tauri NSIS). L'installateur se télécharge dans l'onglet **Actions** → le run →
 **Artifacts** → `comptaflow-desktop-windows` (conservé 14 jours). L'app
 installée utilise `https://test.allinone.ovh`.
@@ -116,12 +115,11 @@ au premier lancement (*Informations complémentaires* → *Exécuter quand même
 │   ├── components/       # AppLayout, AppSidebar, TopBar (notifications), ui/ (shadcn)
 │   ├── contexts/         # AuthContext (JWT + cabinet sélectionné)
 │   ├── hooks/            # use-desktop-notifications, use-toast, use-mobile
-│   └── lib/              # api.ts, api-types.ts, generate-invoice-pdf.ts
+│   └── lib/              # api.ts, api-types.ts, client-data.ts
 ├── src-tauri/
 │   ├── src/lib.rs        # plugins Tauri (opener, notification)
 │   ├── capabilities/     # permissions (default.json)
 │   └── tauri.conf.json   # fenêtre, identifiant, bundle
-├── .github/workflows/desktop-build.yml
 ├── BUILD.md              # build Windows pas à pas
 └── MOBILE_API.md         # API partagée desktop / mobile
 ```

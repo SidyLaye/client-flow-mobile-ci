@@ -5,10 +5,10 @@ sert les deux applications :
 
 | Application | Utilisateurs | API |
 |---|---|---|
-| Desktop (ce dépôt, React + Tauri) | le cabinet : owner, admin, comptable, collaborateur, lecture seule | `/api/v1/…` + en-tête `X-Entrepreneur-Id` |
-| Mobile (`client-flow-mobile`, Flutter) | les clients du cabinet | `/api/v1/client-portal/…` (sans en-tête cabinet) |
+| Desktop (`desktop/`, React + Tauri) | le cabinet : owner, admin, comptable, collaborateur, lecture seule | `/api/v1/…` + en-tête `X-Entrepreneur-Id` |
+| Mobile (`../mobile`, Flutter) | les clients du cabinet | `/api/v1/client-portal/…` (sans en-tête cabinet) |
 
-Supabase n'est plus utilisé (le dossier `supabase/` est un reste de l'ancienne version).
+Supabase n'est plus utilisé.
 
 ## Authentification (commune)
 
