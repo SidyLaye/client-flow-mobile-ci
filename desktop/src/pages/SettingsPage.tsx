@@ -9,12 +9,31 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { useAuth } from "@/contexts/AuthContext";
-import { testSystemNotification } from "@/hooks/use-desktop-notifications";
+import {
+  isAutostartEnabled,
+  isTauri,
+  setAutostart,
+  testSystemNotification,
+} from "@/hooks/use-desktop-notifications";
+import { Switch } from "@/components/ui/switch";
 import { api, ApiError } from "@/lib/api";
 
 export default function SettingsPage() {
   const { user, roles, activeEntrepreneurId, setActiveEntrepreneur } = useAuth();
   const qc = useQueryClient();
+
+  const [autostart, setAutostartState] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (isTauri) isAutostartEnabled().then(setAutostartState).catch(() => setAutostartState(null));
+  }, []);
+  const onToggleAutostart = async (on: boolean) => {
+    try {
+      await setAutostart(on);
+      setAutostartState(on);
+    } catch (e) {
+      toast.error("Réglage impossible", { description: String(e) });
+    }
+  };
 
   const onTestNotification = async () => {
     const result = await testSystemNotification();
@@ -112,9 +131,17 @@ export default function SettingsPage() {
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
           <p className="text-muted-foreground">
-            Les nouvelles notifications s'affichent dans Windows tant que l'application est ouverte
-            ou réduite (vérification toutes les 60 secondes).
+            Les nouvelles notifications s'affichent dans Windows (vérification toutes les 60 secondes).
+            Fermer la fenêtre ne quitte pas ComptaFlow : l'application reste près de l'horloge et
+            continue de vous prévenir. Pour la quitter vraiment : clic droit sur son icône →
+            « Quitter ComptaFlow ».
           </p>
+          {autostart !== null && (
+            <div className="flex items-center gap-3">
+              <Switch id="autostart" checked={autostart} onCheckedChange={onToggleAutostart} />
+              <Label htmlFor="autostart">Lancer ComptaFlow au démarrage de Windows</Label>
+            </div>
+          )}
           <Button variant="outline" size="sm" onClick={onTestNotification}>
             <Bell className="h-4 w-4 mr-1.5" />
             Tester les notifications

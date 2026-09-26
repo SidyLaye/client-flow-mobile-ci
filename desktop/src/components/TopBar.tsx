@@ -15,7 +15,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { useAuth } from "@/contexts/AuthContext";
-import { useDesktopNotifications } from "@/hooks/use-desktop-notifications";
+import { useDefaultAutostart, useDesktopNotifications } from "@/hooks/use-desktop-notifications";
 import { api } from "@/lib/api";
 import type { AppNotification } from "@/lib/api-types";
 
@@ -40,6 +40,7 @@ export function TopBar() {
   }, [notifQuery.data]);
 
   useDesktopNotifications(notifQuery.data ? items : undefined);
+  useDefaultAutostart();
 
   const unreadCount = items.filter((n) => !n.is_read).length;
 

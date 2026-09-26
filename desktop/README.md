@@ -56,12 +56,16 @@ document (voir [MOBILE_API.md](MOBILE_API.md#règles-métier-automatiques)).
 | Où | Comment | Quand |
 |---|---|---|
 | **Desktop** (cloche en haut à droite) | la liste est relue toutes les 60 s, même fenêtre réduite (`src/components/TopBar.tsx`) | app ouverte |
-| **Desktop — notification Windows** | chaque nouvelle notification non lue s'affiche comme notification système (`src/hooks/use-desktop-notifications.ts`, plugin `tauri-plugin-notification`) | app ouverte ou réduite |
+| **Desktop — notification Windows** | chaque nouvelle notification non lue s'affiche comme notification système (`src/hooks/use-desktop-notifications.ts`, plugin `tauri-plugin-notification`) | tant que l'app tourne, fenêtre fermée comprise |
 | **Mobile — push** | le backend envoie la notification via FCM au(x) téléphone(s) du client | même app fermée |
 
-Une application desktop complètement fermée ne reçoit rien : il faut la
-laisser ouverte ou réduite. Dans un navigateur (`npm run dev`), seule la
-cloche fonctionne.
+Fermer la fenêtre ne quitte pas l'app : elle reste dans la zone de
+notification (près de l'horloge) et continue de prévenir. Clic sur l'icône →
+rouvrir ; clic droit → « Quitter ComptaFlow ». Elle démarre avec Windows,
+fenêtre cachée (`--hidden`), réglable dans Paramètres → Notifications Windows,
+qui propose aussi un bouton de test. Relancer l'app rouvre la fenêtre existante
+(une seule instance). Dans un navigateur (`npm run dev`), seule la cloche
+fonctionne.
 
 Côté serveur, le push mobile demande la variable `FCM_CREDENTIALS` (clé du
 compte de service Firebase, sur une ligne) dans l'onglet *Environment* du
@@ -117,7 +121,7 @@ au premier lancement (*Informations complémentaires* → *Exécuter quand même
 │   ├── hooks/            # use-desktop-notifications, use-toast, use-mobile
 │   └── lib/              # api.ts, api-types.ts, client-data.ts
 ├── src-tauri/
-│   ├── src/lib.rs        # plugins Tauri (opener, notification)
+│   ├── src/lib.rs        # plugins (notification, autostart, single-instance), icône de la zone de notification
 │   ├── capabilities/     # permissions (default.json)
 │   └── tauri.conf.json   # fenêtre, identifiant, bundle
 ├── BUILD.md              # build Windows pas à pas

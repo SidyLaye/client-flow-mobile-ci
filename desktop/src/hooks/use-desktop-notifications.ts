@@ -58,3 +58,29 @@ export function useDesktopNotifications(items: AppNotification[] | undefined) {
     })();
   }, [items]);
 }
+
+// ─── Start with Windows ───────────────────────────────────────────────────
+// The app starts hidden in the tray so notifications arrive after a reboot.
+
+const AUTOSTART_SET_KEY = "comptaflow.autostart-configured";
+
+export async function isAutostartEnabled(): Promise<boolean> {
+  if (!isTauri) return false;
+  const { isEnabled } = await import("@tauri-apps/plugin-autostart");
+  return isEnabled();
+}
+
+export async function setAutostart(on: boolean): Promise<void> {
+  if (!isTauri) return;
+  const { enable, disable } = await import("@tauri-apps/plugin-autostart");
+  await (on ? enable() : disable());
+  localStorage.setItem(AUTOSTART_SET_KEY, "1");
+}
+
+/** On first launch, start with Windows by default (the user can turn it off in Settings). */
+export function useDefaultAutostart() {
+  useEffect(() => {
+    if (!isTauri || localStorage.getItem(AUTOSTART_SET_KEY)) return;
+    setAutostart(true).catch((e) => console.warn("[autostart] enable failed", e));
+  }, []);
+}
