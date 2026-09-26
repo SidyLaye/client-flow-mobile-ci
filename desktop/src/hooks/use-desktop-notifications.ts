@@ -2,12 +2,25 @@ import { useEffect, useRef } from "react";
 
 import type { AppNotification } from "@/lib/api-types";
 
-const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+export const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
 async function canNotify(): Promise<boolean> {
   const { isPermissionGranted, requestPermission } = await import("@tauri-apps/plugin-notification");
   if (await isPermissionGranted()) return true;
   return (await requestPermission()) === "granted";
+}
+
+/** Shows one Windows notification now; resolves with what went wrong, if anything. */
+export async function testSystemNotification(): Promise<"ok" | "browser" | "denied" | string> {
+  if (!isTauri) return "browser";
+  try {
+    if (!(await canNotify())) return "denied";
+    const { sendNotification } = await import("@tauri-apps/plugin-notification");
+    sendNotification({ title: "Test ComptaFlow", body: "Si vous voyez ceci, les notifications Windows marchent." });
+    return "ok";
+  } catch (e) {
+    return String(e);
+  }
 }
 
 /**

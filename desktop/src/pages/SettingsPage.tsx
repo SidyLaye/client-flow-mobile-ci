@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Save } from "lucide-react";
+import { Bell, Loader2, Save } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -9,11 +9,30 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { useAuth } from "@/contexts/AuthContext";
+import { testSystemNotification } from "@/hooks/use-desktop-notifications";
 import { api, ApiError } from "@/lib/api";
 
 export default function SettingsPage() {
   const { user, roles, activeEntrepreneurId, setActiveEntrepreneur } = useAuth();
   const qc = useQueryClient();
+
+  const onTestNotification = async () => {
+    const result = await testSystemNotification();
+    if (result === "ok") {
+      toast.success("Notification envoyée", {
+        description:
+          "Rien ne s'affiche ? Vérifiez Paramètres Windows → Système → Notifications (ComptaFlow activé, « Ne pas déranger » désactivé).",
+      });
+    } else if (result === "browser") {
+      toast.error("Disponible seulement dans l'application installée, pas dans le navigateur.");
+    } else if (result === "denied") {
+      toast.error("Notifications refusées", {
+        description: "Activez-les pour ComptaFlow dans Paramètres Windows → Système → Notifications.",
+      });
+    } else {
+      toast.error("Erreur de notification", { description: result });
+    }
+  };
 
   const entrepreneurQuery = useQuery({
     queryKey: ["entrepreneur", activeEntrepreneurId],
@@ -84,6 +103,22 @@ export default function SettingsPage() {
               {user ? `${user.first_name} ${user.last_name}`.trim() || "—" : "—"}
             </p>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Notifications Windows</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3 text-sm">
+          <p className="text-muted-foreground">
+            Les nouvelles notifications s'affichent dans Windows tant que l'application est ouverte
+            ou réduite (vérification toutes les 60 secondes).
+          </p>
+          <Button variant="outline" size="sm" onClick={onTestNotification}>
+            <Bell className="h-4 w-4 mr-1.5" />
+            Tester les notifications
+          </Button>
         </CardContent>
       </Card>
 
