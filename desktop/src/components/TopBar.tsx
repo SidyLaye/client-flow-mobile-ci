@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bell, LogOut, Plus, Search, User } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
@@ -21,6 +21,7 @@ import type { AppNotification } from "@/lib/api-types";
 
 export function TopBar() {
   const navigate = useNavigate();
+  const qc = useQueryClient();
   const { user, signOut } = useAuth();
 
   const notifQuery = useQuery({
@@ -41,6 +42,22 @@ export function TopBar() {
   useDesktopNotifications(notifQuery.data ? items : undefined);
 
   const unreadCount = items.filter((n) => !n.is_read).length;
+
+  const refreshNotifications = () => qc.invalidateQueries({ queryKey: ["notifications"] });
+  const markRead = useMutation({
+    mutationFn: (id: string) => api.notifications.markRead(id),
+    onSuccess: refreshNotifications,
+  });
+  const markAllRead = useMutation({
+    mutationFn: () => api.notifications.markAllRead(),
+    onSuccess: refreshNotifications,
+  });
+
+  const openNotification = (notif: AppNotification) => {
+    if (!notif.is_read) markRead.mutate(notif.id);
+    // Cabinet links are app routes ("/documents/<id>", "/messages?client=<id>").
+    if (notif.link.startsWith("/")) navigate(notif.link);
+  };
 
   return (
     <header className="h-14 flex items-center justify-between border-b border-border bg-card px-4 gap-4 shrink-0">
@@ -77,12 +94,26 @@ export function TopBar() {
                 Aucune notification
               </DropdownMenuItem>
             )}
+            {unreadCount > 0 && (
+              <>
+                <DropdownMenuItem
+                  onClick={() => markAllRead.mutate()}
+                  className="justify-end text-xs text-primary"
+                >
+                  Tout marquer comme lu
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+              </>
+            )}
             {items.slice(0, 5).map((notif) => (
               <DropdownMenuItem
                 key={notif.id}
+                onClick={() => openNotification(notif)}
                 className="flex flex-col items-start gap-0.5 py-2.5"
               >
-                <span className="text-sm font-medium">{notif.title}</span>
+                <span className={`text-sm ${notif.is_read ? "text-muted-foreground" : "font-medium"}`}>
+                  {notif.title}
+                </span>
                 <span className="text-xs text-muted-foreground line-clamp-2">
                   {notif.message}
                 </span>

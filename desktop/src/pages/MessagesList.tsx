@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Lock, Send } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -13,7 +14,10 @@ import type { Client } from "@/lib/api-types";
 export default function MessagesList() {
   const qc = useQueryClient();
   const { user } = useAuth();
-  const [selectedClient, setSelectedClient] = useState<string | null>(null);
+  // "/messages?client=<id>" (from a notification) opens that conversation.
+  const [searchParams] = useSearchParams();
+  const clientParam = searchParams.get("client");
+  const [selectedClient, setSelectedClient] = useState<string | null>(clientParam);
   const [body, setBody] = useState("");
   const [isInternal, setIsInternal] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -28,6 +32,10 @@ export default function MessagesList() {
     () => clientsQuery.data?.results ?? [],
     [clientsQuery.data],
   );
+
+  useEffect(() => {
+    if (clientParam) setSelectedClient(clientParam);
+  }, [clientParam]);
 
   // Auto-select the first client once loaded.
   useEffect(() => {
@@ -63,8 +71,11 @@ export default function MessagesList() {
 
   const markAllMutation = useMutation({
     mutationFn: () => api.messages.markAllRead(selectedClient!),
-    onSuccess: () =>
-      qc.invalidateQueries({ queryKey: ["messages", { client: selectedClient }] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["messages", { client: selectedClient }] });
+      // Reading the conversation also clears its notifications (bell counter).
+      qc.invalidateQueries({ queryKey: ["notifications"] });
+    },
   });
 
   const messages = useMemo(

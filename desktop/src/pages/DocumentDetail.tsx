@@ -51,7 +51,12 @@ export default function DocumentDetail() {
 
   const query = useQuery({
     queryKey: ["documents", id],
-    queryFn: () => api.documents.retrieve(id!),
+    queryFn: async () => {
+      const doc = await api.documents.retrieve(id!);
+      // Opening a document clears its notification (bell counter).
+      qc.invalidateQueries({ queryKey: ["notifications"] });
+      return doc;
+    },
     enabled: Boolean(id),
     retry: false,
   });
