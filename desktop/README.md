@@ -97,7 +97,7 @@ npm test                                # Vitest
 **Par GitHub Actions (recommandé)** : chaque push lance
 `.github/workflows/desktop.yml` (à la racine du dépôt) sur Windows (types, build Vite, build
 Tauri NSIS). L'installateur se télécharge dans l'onglet **Actions** → le run →
-**Artifacts** → `comptaflow-desktop-windows` (conservé 14 jours). L'app
+**Artifacts** → `ComptaFlow-Cabinet-Windows` (conservé 14 jours). L'app
 installée utilise `https://test.allinone.ovh`.
 
 **En local** : `npm run tauri:build`. Détails et dépannage dans

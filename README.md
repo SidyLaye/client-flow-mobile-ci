@@ -29,8 +29,8 @@ Chaque push construit automatiquement l'app modifiée (onglet **Actions**) :
 
 | Workflow | Se lance quand… | Résultat (onglet *Artifacts* du run, 14 jours) |
 |---|---|---|
-| **Mobile (APK)** — `.github/workflows/mobile.yml` | `mobile/` change | `comptaflow-client-apk` → `app-release.apk` |
-| **Desktop (Windows .exe)** — `.github/workflows/desktop.yml` | `desktop/` change | `comptaflow-desktop-windows` → installateur `.exe` |
+| **Mobile (APK)** — `.github/workflows/mobile.yml` | `mobile/` change | `ComptaFlow-Client-Android` → `ComptaFlow-Client-Android.apk` |
+| **Desktop (Windows .exe)** — `.github/workflows/desktop.yml` | `desktop/` change | `ComptaFlow-Cabinet-Windows` → `ComptaFlow-Cabinet-Windows-Setup.exe` |
 | **E2E (API déployée)** — `.github/workflows/e2e.yml` | lancement manuel (*Run workflow*) | vérifie le parcours cabinet ⇄ client sur le serveur ; crée puis supprime un client de test |
 
 Les deux workflows de build se relancent aussi à la main (*Run workflow*).

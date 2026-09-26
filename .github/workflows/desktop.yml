@@ -59,11 +59,11 @@ jobs:
             exit 1
           fi
           echo "::notice title=installer::$f"
-          mkdir -p dist-installer && cp "$f" dist-installer/
+          mkdir -p dist-installer && cp "$f" dist-installer/ComptaFlow-Cabinet-Windows-Setup.exe
 
       - uses: actions/upload-artifact@v4
         with:
-          name: comptaflow-desktop-windows
-          path: desktop/dist-installer/*.exe
+          name: ComptaFlow-Cabinet-Windows
+          path: desktop/dist-installer/ComptaFlow-Cabinet-Windows-Setup.exe
           if-no-files-found: error
           retention-days: 14

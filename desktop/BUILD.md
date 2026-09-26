@@ -90,7 +90,7 @@ take 30–90 seconds.
 
 Every push that touches `desktop/` runs `.github/workflows/desktop.yml` (at the
 repository root) on a Windows runner. Download the installer from the run's
-**Artifacts** (`comptaflow-desktop-windows`).
+**Artifacts** (`ComptaFlow-Cabinet-Windows`).
 
 ## 6. Code-signing (optional, for distribution)
 

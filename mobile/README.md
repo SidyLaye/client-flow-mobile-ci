@@ -173,7 +173,7 @@ flutter build ipa --dart-define-from-file=.env
 Every push that touches `mobile/` runs `.github/workflows/mobile.yml` (at the
 repository root): `flutter analyze`,
 `flutter test`, then a release APK against `https://test.allinone.ovh`.
-Download it from the run's **Artifacts** (`comptaflow-client-apk`, kept 14
+Download it from the run's **Artifacts** (`ComptaFlow-Client-Android`, kept 14
 days). Release builds are signed with the debug key for now; uninstall a
 previously installed build if Android refuses the update.
 
