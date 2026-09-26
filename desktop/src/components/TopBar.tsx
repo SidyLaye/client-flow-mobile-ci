@@ -28,8 +28,9 @@ export function TopBar() {
     queryKey: ["notifications"],
     queryFn: () => api.notifications.list(),
     retry: false,
-    refetchInterval: 60_000,
-    // Keep polling when the window is minimized so system notifications still show.
+    refetchInterval: 15_000,
+    // Keep polling when the window is hidden in the tray so system notifications still show
+    // (WebView2 background throttling is disabled in tauri.conf.json).
     refetchIntervalInBackground: true,
   });
 

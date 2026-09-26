@@ -40,7 +40,7 @@ Les deux workflows de build se relancent aussi à la main (*Run workflow*).
 | App | Comment elle est prévenue |
 |---|---|
 | Mobile | **push Firebase** : la notification arrive même app fermée |
-| Desktop | la cloche est relue toutes les 60 s et chaque nouveauté s'affiche en **notification Windows** ; fermer la fenêtre laisse l'app tourner près de l'horloge, et elle démarre avec Windows |
+| Desktop | la cloche est relue toutes les 15 s et chaque nouveauté s'affiche en **notification Windows** ; fermer la fenêtre laisse l'app tourner près de l'horloge, et elle démarre avec Windows |
 
 Réglages : l'app mobile embarque la configuration Firebase du projet
 `mourad-7bf2a` ; le backend a besoin de la clé du compte de service dans la

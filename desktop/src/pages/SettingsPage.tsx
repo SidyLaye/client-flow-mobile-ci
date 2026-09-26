@@ -131,7 +131,7 @@ export default function SettingsPage() {
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
           <p className="text-muted-foreground">
-            Les nouvelles notifications s'affichent dans Windows (vérification toutes les 60 secondes).
+            Les nouvelles notifications s'affichent dans Windows (vérification toutes les 15 secondes).
             Fermer la fenêtre ne quitte pas ComptaFlow : l'application reste près de l'horloge et
             continue de vous prévenir. Pour la quitter vraiment : clic droit sur son icône →
             « Quitter ComptaFlow ».

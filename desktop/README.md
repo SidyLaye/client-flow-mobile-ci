@@ -55,7 +55,7 @@ document (voir [MOBILE_API.md](MOBILE_API.md#règles-métier-automatiques)).
 
 | Où | Comment | Quand |
 |---|---|---|
-| **Desktop** (cloche en haut à droite) | la liste est relue toutes les 60 s, même fenêtre réduite (`src/components/TopBar.tsx`) | app ouverte |
+| **Desktop** (cloche en haut à droite) | la liste est relue toutes les 15 s, même fenêtre réduite (`src/components/TopBar.tsx`) | app ouverte |
 | **Desktop — notification Windows** | chaque nouvelle notification non lue s'affiche comme notification système (`src/hooks/use-desktop-notifications.ts`, plugin `tauri-plugin-notification`) | tant que l'app tourne, fenêtre fermée comprise |
 | **Mobile — push** | le backend envoie la notification via FCM au(x) téléphone(s) du client | même app fermée |
 

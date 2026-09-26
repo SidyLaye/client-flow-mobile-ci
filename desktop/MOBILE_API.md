@@ -86,5 +86,5 @@ Catégories : `purchase_invoice`, `sales_invoice`, `bank_statement`, `contract`,
   service Firebase (sur une ligne, ou chemin d'un fichier). Vide = push
   désactivé, les notifications restent visibles dans les applications.
 - Le desktop ne reçoit pas de push : il relit `/api/v1/notifications/` toutes
-  les 60 s et affiche une notification Windows pour chaque nouvelle entrée.
+  les 15 s et affiche une notification Windows pour chaque nouvelle entrée.
 
