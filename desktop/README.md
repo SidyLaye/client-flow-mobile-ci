@@ -7,7 +7,7 @@ du cabinet utilisent l'application mobile Flutter.
 
 - **Front** : React 18 + TypeScript + Vite, Tailwind + shadcn/ui, TanStack Query
 - **Desktop** : Tauri 2 (installateur Windows `.exe`)
-- **Backend** : API Django REST `a2t-expertise`, déployée sur
+- **Backend** : API Django REST [`comptaflow-backend`](https://github.com/SidyLaye/comptaflow-backend), déployée sur
   `https://test.allinone.ovh` (Dokploy). Le même backend sert le mobile.
 
 Ce dossier fait partie du dépôt qui contient aussi l'app mobile
@@ -31,7 +31,7 @@ Ce dossier fait partie du dépôt qui contient aussi l'app mobile
         │  + X-Entrepreneur-Id       │
         └──────────────┬─────────────┘
                        ▼
-          Django REST (a2t-expertise)
+          Django REST (comptaflow-backend)
           PostgreSQL · Redis · Celery
                        │
                        ▼  FCM (Firebase Cloud Messaging)

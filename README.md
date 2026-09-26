@@ -8,7 +8,7 @@ Ce dépôt contient les **deux applications** de ComptaFlow / A2T Expertise :
 | [`mobile/`](mobile/) | App des **clients** du cabinet : scanner et envoyer des pièces, répondre aux demandes, messagerie | les clients | Flutter (BLoC) | APK Android |
 
 Le **backend** est dans un dépôt séparé :
-[`SidyLaye/a2t-expertise`](https://github.com/SidyLaye/a2t-expertise)
+[`SidyLaye/comptaflow-backend`](https://github.com/SidyLaye/comptaflow-backend)
 (Django REST, PostgreSQL, Redis, Celery), déployé avec Dokploy sur
 `https://test.allinone.ovh`. Les deux apps parlent à ce même backend.
 
@@ -17,7 +17,7 @@ Le **backend** est dans un dépôt séparé :
         │  /api/v1/…                       │  /api/v1/client-portal/…
         └────────────────┬─────────────────┘
                          ▼
-            backend Django (a2t-expertise)
+            backend Django (comptaflow-backend)
                          │
                          ▼  Firebase Cloud Messaging
                 notifications push Android

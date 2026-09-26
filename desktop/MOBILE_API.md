@@ -1,6 +1,6 @@
 # ComptaFlow / A2T Expertise — un seul backend pour le desktop et le mobile
 
-Le **backend Django REST** (`a2t-expertise`, déployé sur `https://test.allinone.ovh`)
+Le **backend Django REST** ([`comptaflow-backend`](https://github.com/SidyLaye/comptaflow-backend), déployé sur `https://test.allinone.ovh`)
 sert les deux applications :
 
 | Application | Utilisateurs | API |
