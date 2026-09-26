@@ -15,6 +15,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { useAuth } from "@/contexts/AuthContext";
+import { useDesktopNotifications } from "@/hooks/use-desktop-notifications";
 import { api } from "@/lib/api";
 import type { AppNotification } from "@/lib/api-types";
 
@@ -27,6 +28,8 @@ export function TopBar() {
     queryFn: () => api.notifications.list(),
     retry: false,
     refetchInterval: 60_000,
+    // Keep polling when the window is minimized so system notifications still show.
+    refetchIntervalInBackground: true,
   });
 
   const items = useMemo<AppNotification[]>(() => {
@@ -34,6 +37,8 @@ export function TopBar() {
     if (!data) return [];
     return Array.isArray(data) ? data : data.results;
   }, [notifQuery.data]);
+
+  useDesktopNotifications(notifQuery.data ? items : undefined);
 
   const unreadCount = items.filter((n) => !n.is_read).length;
 
